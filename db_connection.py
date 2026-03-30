@@ -7,7 +7,7 @@ import streamlit as st
 DB_CONFIG = {
     "host":     "localhost",
     "user":     "root",
-    "password": "1234",  # ← SET YOUR MYSQL PASSWORD HERE
+    "password": "A5HANK",  # ← SET YOUR MYSQL PASSWORD HERE
     "database": "ARENA_SNU"
 }
 
