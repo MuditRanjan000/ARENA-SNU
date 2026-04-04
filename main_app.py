@@ -128,5 +128,10 @@ elif pages[selected]:
         spec = importlib.util.spec_from_file_location("page", fname)
         mod = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(mod)
+
+        # ✅ ADD THIS LINE ONLY
+        if hasattr(mod, "show"):
+            mod.show()
+
     else:
         st.error(f"❌ File '{fname}' not found.")
