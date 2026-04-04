@@ -7,23 +7,32 @@ import streamlit as st
 from dotenv import load_dotenv
 import os
 
-# Load environment variables
 load_dotenv()
 
 DB_CONFIG = {
     "host": "localhost",
     "user": "root",
-    "password": os.getenv("DB_PASSWORD"),  # pulled from .env
+    "password": os.getenv("DB_PASSWORD"),
     "database": "ARENA_SNU"
 }
+
+
+def _show_conn_error(e):
+    """Show DB connection error only once per session to avoid spam."""
+    if not st.session_state.get("_db_err_shown"):
+        st.error(f"❌ Database connection failed: {e}")
+        st.session_state["_db_err_shown"] = True
+
 
 def get_connection():
     try:
         conn = mysql.connector.connect(**DB_CONFIG)
         if conn.is_connected():
+            # Reset error flag on successful connection
+            st.session_state["_db_err_shown"] = False
             return conn
     except Error as e:
-        st.error(f"❌ Database connection failed: {e}")
+        _show_conn_error(e)
         return None
 
 

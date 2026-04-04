@@ -47,9 +47,18 @@ st.markdown("""
 """, unsafe_allow_html=True)
 st.divider()
 
-tab1, tab2, tab3, tab4 = st.tabs([
-    "📊 Dashboard", "🏆 Match Results", "🏟️ Team Management", "👤 Player Management"
-])
+role = st.session_state.get("role", "viewer")
+can_edit = role in ("admin", "manager")
+
+tab_labels = ["📊 Dashboard", "🏟️ Team Management", "👤 Player Management"]
+if can_edit:
+    tab_labels.insert(1, "🏆 Match Results")
+
+tabs = st.tabs(tab_labels)
+tab1 = tabs[0]
+tab_results = tabs[1] if can_edit else None
+tab_teams   = tabs[2] if can_edit else tabs[1]
+tab_players = tabs[3] if can_edit else tabs[2]
 
 # ═══════════════════════ TAB 1: DASHBOARD ═════════════════════
 with tab1:
@@ -186,8 +195,9 @@ with tab1:
         else:   st.caption("No data yet")
 
 
-# ═══════════════════ TAB 2: MATCH RESULTS ═════════════════════
-with tab2:
+# ═══════════════════ TAB 2: MATCH RESULTS (admin/manager only) ═
+if can_edit:
+  with tab_results:
     st.subheader("🏆 Update Match Result")
     st.markdown("""
     <div style="padding:12px 18px;border-radius:10px;border-left:4px solid #f5a623;
@@ -267,7 +277,7 @@ with tab2:
 
 
 # ══════════════════ TAB 3: TEAM MANAGEMENT ════════════════════
-with tab3:
+with tab_teams:
     st.subheader("🏟️ Team Management")
     sports_list = run_query("SELECT Sport_ID, Sport_Name FROM Sports ORDER BY Sport_Name")
     sport_map   = {s["Sport_Name"]: s["Sport_ID"] for s in sports_list} if sports_list else {}
@@ -323,7 +333,7 @@ with tab3:
 
 
 # ══════════════════ TAB 4: PLAYER MANAGEMENT ══════════════════
-with tab4:
+with tab_players:
     st.subheader("👤 Player Management")
     all_teams = run_query("""
         SELECT t.Team_ID, t.Team_Name, t.University, sp.Sport_Name

@@ -1,110 +1,139 @@
+# page_basketball.py — ARENA SNU Basketball Module
+# Assigned: Amitog | Integrated by: Mudit
 import streamlit as st
 import time
 import pandas as pd
 import plotly.express as px
 from db_connection import run_query
 
-st.title("🏀 Basketball Module")
+try:
+    st.set_page_config(page_title="Basketball — ARENA SNU", page_icon="🏀", layout="wide")
+except Exception:
+    pass
 
-# Tabs
+st.markdown("""
+<style>
+    div.stButton > button {
+        background: linear-gradient(90deg, #6c63ff, #a855f7);
+        color: white; font-weight: 700; border-radius: 8px;
+        border: none; transition: all .3s;
+    }
+    div.stButton > button:hover { transform: scale(1.02); box-shadow: 0 4px 20px rgba(108,99,255,.45); }
+    footer { visibility: hidden; }
+</style>
+""", unsafe_allow_html=True)
+
+st.markdown("""
+<h2 style="background:linear-gradient(90deg,#f97316,#6c63ff);
+   -webkit-background-clip:text;-webkit-text-fill-color:transparent;
+   font-size:2rem;font-weight:800;margin:0">🏀 Basketball Module</h2>
+<p style="color:#6b7a99;font-size:.875rem;margin-top:4px">Score Entry · MVP Leaderboard · Team Stats</p>
+""", unsafe_allow_html=True)
+st.divider()
+
 tab1, tab2 = st.tabs(["📝 Enter Stats", "📊 Leaderboards"])
 
-# ─────────────────────────────
-# 📝 TAB 1: ENTER STATS
-# ─────────────────────────────
 with tab1:
-
-    st.subheader("Enter Player Stats")
-
-    matches = run_query("SELECT Match_ID FROM matches", fetch=True)
-    players = run_query("SELECT Player_ID, Player_Name FROM players", fetch=True)
-
-    if not matches or not players:
-        st.warning("⚠️ Matches or Players not found in DB")
+    matches = run_query("""
+        SELECT m.Match_ID,
+               CONCAT(ta.Team_Name, ' vs ', tb.Team_Name, '  (', m.Match_Date, ')  [', m.Stage, ']') AS Match_Desc,
+               m.Team_A_ID, m.Team_B_ID
+        FROM Matches m
+        JOIN Teams ta ON m.Team_A_ID = ta.Team_ID
+        JOIN Teams tb ON m.Team_B_ID = tb.Team_ID
+        WHERE m.Sport_ID = (SELECT Sport_ID FROM Sports WHERE Sport_Name='Basketball')
+        ORDER BY m.Match_Date DESC
+    """)
+    if not matches:
+        st.warning("⚠️ No basketball matches found. Schedule a match first.")
         st.stop()
 
-    match_list = [m["Match_ID"] for m in matches]
-    player_dict = {p["Player_Name"]: p["Player_ID"] for p in players}
+    match_dict = {r["Match_Desc"]: r for r in matches}
+    sel_match  = match_dict[st.selectbox("Select Match", list(match_dict.keys()))]
+    match_id   = sel_match["Match_ID"]
 
-    selected_match = st.selectbox("Select Match", match_list)
-    selected_player = st.selectbox("Select Player", list(player_dict.keys()))
+    players = run_query("""
+        SELECT p.Player_ID,
+               CONCAT(p.Player_Name, '  (', t.Team_Name, ')  — ', p.Role) AS Player_Desc
+        FROM Players p JOIN Teams t ON p.Team_ID = t.Team_ID
+        WHERE p.Team_ID IN (%s, %s)
+        ORDER BY t.Team_Name, p.Player_Name
+    """, (sel_match["Team_A_ID"], sel_match["Team_B_ID"]))
 
-    col1, col2 = st.columns(2)
+    if not players:
+        st.warning("⚠️ No players found for these teams.")
+        st.stop()
 
-    with col1:
-        points = st.number_input("Points", 0, 100)
-        rebounds = st.number_input("Rebounds", 0, 50)
+    player_dict = {r["Player_Desc"]: r["Player_ID"] for r in players}
+    player_id   = player_dict[st.selectbox("Select Player", list(player_dict.keys()))]
 
-    with col2:
-        assists = st.number_input("Assists", 0, 30)
-        steals = st.number_input("Steals", 0, 20)
+    existing = run_query(
+        "SELECT COUNT(*) AS cnt FROM Scorecard_Basketball WHERE Match_ID=%s AND Player_ID=%s",
+        (match_id, player_id)
+    )
+    if existing and existing[0]["cnt"] > 0:
+        st.markdown("""<div style="padding:10px 16px;border-radius:8px;border-left:3px solid #f59e0b;
+        background:rgba(245,158,11,.07);font-size:13px;margin-bottom:8px">
+        ⚠️ Entry already exists for this player in this match. Submitting adds another record.</div>""",
+        unsafe_allow_html=True)
 
-    if st.button("Submit Stats"):
-        run_query("""
-            INSERT INTO scorecard_basketball
-            (Match_ID, Player_ID, Points, Rebounds, Assists, Steals)
-            VALUES (%s, %s, %s, %s, %s, %s)
-        """, (
-            selected_match,
-            player_dict[selected_player],
-            points,
-            rebounds,
-            assists,
-            steals
-        ), fetch=False)
+    with st.form("bball_stats", clear_on_submit=True):
+        c1, c2 = st.columns(2)
+        with c1:
+            points   = st.number_input("Points",   min_value=0, max_value=100)
+            rebounds = st.number_input("Rebounds", min_value=0, max_value=50)
+        with c2:
+            assists  = st.number_input("Assists",  min_value=0, max_value=30)
+            steals   = st.number_input("Steals",   min_value=0, max_value=20)
 
-        st.success("✅ Stats Added Successfully")
-        time.sleep(1)
-        st.rerun()
+        if st.form_submit_button("🏀 Submit Stats", use_container_width=True):
+            with st.spinner("Recording to MySQL…"):
+                run_query(
+                    "INSERT INTO Scorecard_Basketball (Match_ID, Player_ID, Points, Rebounds, Assists, Steals) "
+                    "VALUES (%s, %s, %s, %s, %s, %s)",
+                    (match_id, player_id, points, rebounds, assists, steals), fetch=False
+                )
+                time.sleep(0.4)
+            st.toast("Stats recorded!", icon="✅")
+            time.sleep(1)
+            st.rerun()
 
-
-# ─────────────────────────────
-# 📊 TAB 2: LEADERBOARD
-# ─────────────────────────────
 with tab2:
-
-    st.subheader("🏆 Top Basketball Players")
-
-    # 🔥 FINAL SQL QUERY (WITH STEALS)
     data = run_query("""
-        SELECT 
-            p.Player_Name,
-            SUM(sb.Points) AS Total_Points,
-            SUM(sb.Rebounds) AS Total_Rebounds,
-            SUM(sb.Assists) AS Total_Assists,
-            SUM(sb.Steals) AS Total_Steals
-        FROM scorecard_basketball sb
-        JOIN players p ON sb.Player_ID = p.Player_ID
-        GROUP BY sb.Player_ID
-        ORDER BY Total_Points DESC
-    """, fetch=True)
-
-    if data:
-        df = pd.DataFrame(data)
-
-        # Add Rank
-        df.insert(0, "Rank", range(1, len(df)+1))
-
-        # Show Table
-        st.dataframe(df, use_container_width=True, hide_index=True)
-
-        # 📊 Chart
-        st.subheader("📊 Performance Comparison")
-
-        fig = px.bar(
-            df.head(10),
-            x="Player_Name",
-            y=[
-                "Total_Points",
-                "Total_Rebounds",
-                "Total_Assists",
-                "Total_Steals"
-            ],
-            barmode="group",
-            title="Top Players Performance"
-        )
-
-        st.plotly_chart(fig, use_container_width=True)
-
+        SELECT p.Player_Name, t.Team_Name,
+               SUM(sb.Points) AS Total_Points, SUM(sb.Rebounds) AS Total_Rebounds,
+               SUM(sb.Assists) AS Total_Assists, SUM(sb.Steals) AS Total_Steals,
+               ROUND(AVG(sb.Points), 1) AS Avg_Points,
+               COUNT(DISTINCT sb.Match_ID) AS Games
+        FROM Scorecard_Basketball sb
+        JOIN Players p ON sb.Player_ID = p.Player_ID
+        JOIN Teams t ON p.Team_ID = t.Team_ID
+        GROUP BY sb.Player_ID ORDER BY Total_Points DESC
+    """)
+    if not data:
+        st.info("No basketball data yet.")
     else:
-        st.info("No basketball data available yet")
+        df = pd.DataFrame(data)
+        df.insert(0, "Rank", range(1, len(df) + 1))
+        mvp = df.iloc[0]
+        st.markdown(f"""<div style="padding:12px 18px;border-radius:10px;border-left:4px solid #f97316;
+        background:rgba(249,115,22,.08);margin-bottom:16px;font-size:14px">
+        🏀 <strong>MVP:</strong> {mvp['Player_Name']} <span style="color:#6b7a99">({mvp['Team_Name']})</span> —
+        <strong style="color:#fdba74">{mvp['Total_Points']} pts · {mvp['Avg_Points']} avg</strong></div>""",
+        unsafe_allow_html=True)
+
+        def hl(row): return ["background-color:rgba(249,115,22,.1)"]*len(row) if row["Rank"]==1 else [""]*len(row)
+        st.dataframe(df.style.apply(hl, axis=1), use_container_width=True, hide_index=True)
+
+        st.divider()
+        fig = px.bar(df.head(10), x="Player_Name",
+                     y=["Total_Points","Total_Rebounds","Total_Assists","Total_Steals"],
+                     barmode="group",
+                     color_discrete_sequence=["#f97316","#6c63ff","#a855f7","#22c55e"],
+                     labels={"Player_Name":"Player","value":"Count","variable":"Stat"},
+                     title="Top Players — All Stats")
+        fig.update_layout(plot_bgcolor="rgba(0,0,0,0)", paper_bgcolor="rgba(0,0,0,0)",
+                          font_color="#e8ecf4", xaxis=dict(gridcolor="#252c3d"),
+                          yaxis=dict(gridcolor="#252c3d"), margin=dict(t=36,b=0,l=0,r=0),
+                          legend=dict(orientation="h", y=1.1))
+        st.plotly_chart(fig, use_container_width=True)

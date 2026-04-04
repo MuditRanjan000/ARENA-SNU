@@ -1,10 +1,12 @@
-# prediction.py — ARENA SNU ML Prediction Module (v2)
-# Novel Feature: Python fetches MySQL data → linear regression → stores back to DB
+# prediction.py — ARENA SNU ML Prediction Module
 # System Architect: Mudit
+# numpy linear regression on MySQL match history → saves back to DB
+
 import streamlit as st
-import pandas as pd
 import numpy as np
+import pandas as pd
 import plotly.graph_objects as go
+import plotly.express as px
 from db_connection import run_query
 
 try:
@@ -19,14 +21,10 @@ st.markdown("""
         color: white; font-weight: 700; border-radius: 8px;
         border: none; transition: all .3s;
     }
-    div.stButton > button:hover {
-        transform: scale(1.02);
-        box-shadow: 0 4px 20px rgba(108,99,255,.45);
-    }
+    div.stButton > button:hover { transform: scale(1.02); box-shadow: 0 4px 20px rgba(108,99,255,.45); }
     [data-testid="stMetric"] {
         background: #1c2030; border: 1px solid #252c3d;
         border-radius: 12px; padding: 16px 20px;
-        border-top: 3px solid #6c63ff;
     }
     footer { visibility: hidden; }
 </style>
@@ -36,209 +34,208 @@ st.markdown("""
 <div style="padding:24px 0 8px">
   <h2 style="background:linear-gradient(90deg,#6c63ff,#a855f7);
      -webkit-background-clip:text;-webkit-text-fill-color:transparent;
-     font-size:2rem;font-weight:800;margin:0">📈 Player Performance Prediction</h2>
+     font-size:2rem;font-weight:800;margin:0">📈 ML Performance Predictor</h2>
   <p style="color:#6b7a99;font-size:.875rem;margin-top:4px">
-     Linear regression on MySQL match history · Stores predictions back to the database</p>
+     Linear Regression on MySQL match history · Predictions saved back to DB</p>
+</div>
+""", unsafe_allow_html=True)
+st.markdown("""
+<div style="padding:10px 16px;border-radius:8px;border-left:3px solid #6c63ff;
+background:rgba(108,99,255,.07);font-size:13px;margin-bottom:16px">
+    Fetches last 10 scores from MySQL per player · Pure <strong>numpy</strong> linear regression ·
+    Scatter + trendline + 95% confidence band · Predicted score saved to <code>Predictions</code> table.
 </div>
 """, unsafe_allow_html=True)
 st.divider()
 
-# ── Sport & Player Selection ──────────────────────────────────
-col_sel1, col_sel2 = st.columns([1, 2])
-
+# ── Sport + Player Selection ──────────────────────────────────
 SPORT_CONFIG = {
-    "Cricket":    {"table": "Scorecard_Cricket",    "metric": "Runs_Scored",  "label": "Runs"},
-    "Football":   {"table": "Scorecard_Football",   "metric": "Goals",        "label": "Goals"},
-    "Basketball": {"table": "Scorecard_Basketball", "metric": "Points",       "label": "Points"},
+    "Cricket": {
+        "table":  "Scorecard_Cricket",
+        "metric": "Runs_Scored",
+        "label":  "Runs",
+        "color":  "#a855f7",
+        "icon":   "🏏",
+    },
+    "Football": {
+        "table":  "Scorecard_Football",
+        "metric": "Goals",
+        "label":  "Goals",
+        "color":  "#22c55e",
+        "icon":   "⚽",
+    },
+    "Basketball": {
+        "table":  "Scorecard_Basketball",
+        "metric": "Points",
+        "label":  "Points",
+        "color":  "#f97316",
+        "icon":   "🏀",
+    },
 }
 
-with col_sel1:
+col_sport, col_player = st.columns([1, 2])
+
+with col_sport:
     sport_choice = st.selectbox("Sport", list(SPORT_CONFIG.keys()))
 
 cfg = SPORT_CONFIG[sport_choice]
 
-join_table = {
-    "Cricket":    "Scorecard_Cricket sc  JOIN Players p ON sc.Player_ID=p.Player_ID JOIN Teams t ON p.Team_ID=t.Team_ID",
-    "Football":   "Scorecard_Football sf JOIN Players p ON sf.Player_ID=p.Player_ID JOIN Teams t ON p.Team_ID=t.Team_ID",
-    "Basketball": "Scorecard_Basketball sb JOIN Players p ON sb.Player_ID=p.Player_ID JOIN Teams t ON p.Team_ID=t.Team_ID",
-}
-
-players = run_query(f"""
-    SELECT DISTINCT p.Player_ID, p.Player_Name, t.Team_Name
-    FROM {join_table[sport_choice]}
+# Fetch players who have at least 3 entries (minimum for meaningful regression)
+players_raw = run_query(f"""
+    SELECT p.Player_ID, p.Player_Name, t.Team_Name,
+           COUNT(*) AS entries
+    FROM {cfg['table']} sc
+    JOIN Players p ON sc.Player_ID = p.Player_ID
+    JOIN Teams t ON p.Team_ID = t.Team_ID
+    GROUP BY sc.Player_ID
+    HAVING entries >= 1
     ORDER BY p.Player_Name
 """)
 
-if not players:
-    st.info(f"No {sport_choice} scores recorded yet. Enter some scores first.")
+if not players_raw:
+    st.warning(f"⚠️ No {sport_choice} scorecard data found. Enter some scores first.")
     st.stop()
 
-player_map = {f"{p['Player_Name']} ({p['Team_Name']})": p["Player_ID"] for p in players}
+with col_player:
+    player_map = {
+        f"{p['Player_Name']} ({p['Team_Name']})": p for p in players_raw
+    }
+    selected_label = st.selectbox("Select Player", list(player_map.keys()))
 
-with col_sel2:
-    selected_player = st.selectbox("Player", list(player_map.keys()))
+player = player_map[selected_label]
+pid    = player["Player_ID"]
 
-player_id = player_map[selected_player]
-
-# ── Fetch match history ───────────────────────────────────────
-history = run_query(
-    f"SELECT {cfg['metric']} AS score FROM {cfg['table']} "
-    f"WHERE Player_ID = %s ORDER BY Stat_ID DESC LIMIT 10",
-    (player_id,)
-)
-
-if not history or len(history) < 2:
-    st.warning("⚠️ Need at least 2 match records to generate a prediction. Enter more scores first.")
-    st.stop()
-
-scores = [h["score"] for h in reversed(history)]
-n      = len(scores)
-X      = np.arange(1, n + 1, dtype=float)
-y      = np.array(scores, dtype=float)
-
-# ── Linear regression (pure numpy) ───────────────────────────
-x_mean, y_mean = X.mean(), y.mean()
-slope     = ((X - x_mean) * (y - y_mean)).sum() / ((X - x_mean) ** 2).sum()
-intercept = y_mean - slope * x_mean
-
-predicted   = max(0.0, round(slope * (n + 1) + intercept, 1))
-trend_line  = slope * X + intercept
-
-# Confidence range: ±1 std dev of residuals
-residuals   = y - (slope * X + intercept)
-std_resid   = float(np.std(residuals))
-conf_lo     = max(0.0, round(predicted - std_resid, 1))
-conf_hi     = round(predicted + std_resid, 1)
-
-# ── Layout ────────────────────────────────────────────────────
-st.divider()
-col_chart, col_metrics = st.columns([2, 1])
-
-with col_chart:
-    st.subheader(f"{selected_player} — Last {n} Matches")
-
-    fig = go.Figure()
-
-    # Actual scores scatter + line
-    fig.add_trace(go.Scatter(
-        x=list(X), y=scores,
-        mode="lines+markers",
-        name="Actual",
-        line=dict(color="#6c63ff", width=2.5),
-        marker=dict(size=8, color="#6c63ff",
-                    line=dict(color="#fff", width=1.5)),
-    ))
-
-    # Trend line
-    fig.add_trace(go.Scatter(
-        x=list(X), y=list(trend_line),
-        mode="lines",
-        name="Trend",
-        line=dict(color="#a855f7", width=1.5, dash="dot"),
-    ))
-
-    # Prediction point with confidence bar
-    fig.add_trace(go.Scatter(
-        x=[n + 1], y=[predicted],
-        mode="markers",
-        name=f"Prediction (Match {n+1})",
-        marker=dict(size=14, color="#f5a623",
-                    symbol="star",
-                    line=dict(color="#fff", width=1.5)),
-        error_y=dict(
-            type="data", symmetric=False,
-            array=[conf_hi - predicted],
-            arrayminus=[predicted - conf_lo],
-            color="#f5a623", thickness=1.5, width=6
-        )
-    ))
-
-    # Shade the future match region
-    fig.add_vrect(
-        x0=n + 0.5, x1=n + 1.5,
-        fillcolor="rgba(245,166,35,.06)",
-        layer="below", line_width=0
-    )
-    fig.add_annotation(
-        x=n + 1, y=max(scores) * 1.05,
-        text="Next match →",
-        showarrow=False, font=dict(color="#f5a623", size=11)
-    )
-
-    fig.update_layout(
-        plot_bgcolor="rgba(0,0,0,0)", paper_bgcolor="rgba(0,0,0,0)",
-        font_color="#e8ecf4",
-        xaxis=dict(title="Match #", gridcolor="#252c3d", dtick=1),
-        yaxis=dict(title=cfg["label"], gridcolor="#252c3d"),
-        legend=dict(orientation="h", yanchor="bottom", y=1.02,
-                    xanchor="right", x=1),
-        margin=dict(t=20, b=0, l=0, r=0),
-        hovermode="x unified"
-    )
-    st.plotly_chart(fig, use_container_width=True)
-
-with col_metrics:
-    st.subheader("Prediction Summary")
-
-    trend_emoji = "📈 Rising" if slope > 0.1 else ("📉 Falling" if slope < -0.1 else "➡️ Stable")
-
-    st.metric(f"Predicted {cfg['label']} (next match)", predicted)
-    st.metric("Confidence Range", f"{conf_lo} – {conf_hi}",
-              help="±1 standard deviation of recent residuals")
-    st.metric(f"Average (last {n})", round(float(y_mean), 1))
-    st.metric("Trend", trend_emoji)
-    st.metric("Peak (last 10)", int(y.max()))
-    st.metric("Low (last 10)",  int(y.min()))
-
-    st.divider()
-    if st.button("💾 Save Prediction to MySQL", use_container_width=True):
-        with st.spinner("Saving to Predictions table…"):
-            rows = run_query(
-                "INSERT INTO Predictions (Player_ID, Sport_Name, Predicted_Score) VALUES (%s, %s, %s)",
-                (player_id, sport_choice, predicted), fetch=False
-            )
-        if rows:
-            st.success("✅ Saved to MySQL Predictions table!")
-            st.toast("Prediction stored!", icon="💾")
-        else:
-            st.error("❌ Failed to save.")
-
-# ── Prediction History ────────────────────────────────────────
-st.divider()
-st.subheader("📚 All Stored Predictions")
-st.caption("Every prediction ever saved — pulled live from MySQL Predictions table")
-
-preds = run_query("""
-    SELECT p.Player_Name, t.Team_Name, pr.Sport_Name,
-           pr.Predicted_Score, pr.Predicted_At
-    FROM Predictions pr
-    JOIN Players p ON pr.Player_ID=p.Player_ID
-    JOIN Teams t ON p.Team_ID=t.Team_ID
-    ORDER BY pr.Predicted_At DESC
-    LIMIT 30
+# ── Fetch last 10 scores ──────────────────────────────────────
+scores_raw = run_query(f"""
+    SELECT {cfg['metric']} AS score
+    FROM {cfg['table']}
+    WHERE Player_ID = {pid}
+    ORDER BY Stat_ID DESC
+    LIMIT 10
 """)
 
-if preds:
-    pred_df = pd.DataFrame(preds)
-    st.dataframe(pred_df, use_container_width=True, hide_index=True)
+if not scores_raw:
+    st.warning("No scores found for this player.")
+    st.stop()
 
-    # Mini chart: predictions over time per sport
-    with st.expander("📈 Prediction Trend Chart"):
-        fig2 = px.line(
-            pred_df, x="Predicted_At", y="Predicted_Score",
-            color="Sport_Name", markers=True,
-            color_discrete_sequence=["#a855f7", "#22c55e", "#f97316"],
-            labels={"Predicted_At": "Saved At", "Predicted_Score": "Predicted Score"}
-        )
-        fig2.update_layout(
-            plot_bgcolor="rgba(0,0,0,0)", paper_bgcolor="rgba(0,0,0,0)",
-            font_color="#e8ecf4",
-            xaxis=dict(gridcolor="#252c3d"),
-            yaxis=dict(gridcolor="#252c3d"),
-            margin=dict(t=10, b=0, l=0, r=0),
-        )
-        st.plotly_chart(fig2, use_container_width=True)
-else:
-    st.info("No predictions saved yet. Generate and save one above!")
+scores = [float(r["score"]) for r in reversed(scores_raw)]  # chronological order
+n      = len(scores)
+x      = np.arange(1, n + 1, dtype=float)
+y      = np.array(scores, dtype=float)
 
-st.caption("ARENA SNU · Novel Feature: Python ML + MySQL Integration · System Architect: Mudit")
+# ── Linear Regression (pure numpy) ───────────────────────────
+x_mean = x.mean()
+y_mean = y.mean()
+slope  = np.sum((x - x_mean) * (y - y_mean)) / np.sum((x - x_mean) ** 2)
+intercept = y_mean - slope * x_mean
+
+next_x     = float(n + 1)
+prediction = slope * next_x + intercept
+prediction = max(0.0, round(prediction, 2))   # scores can't be negative
+
+# ── Confidence band (95%) ─────────────────────────────────────
+y_hat = slope * x + intercept
+residuals = y - y_hat
+se   = np.sqrt(np.sum(residuals ** 2) / max(n - 2, 1))
+t95  = 2.0   # approx t-value for small n
+margin = t95 * se * np.sqrt(1 + 1/n + (next_x - x_mean)**2 / np.sum((x - x_mean)**2))
+
+conf_low  = max(0.0, round(prediction - margin, 2))
+conf_high = round(prediction + margin, 2)
+
+# ── Metrics Row ───────────────────────────────────────────────
+st.divider()
+m1, m2, m3, m4 = st.columns(4)
+m1.metric(f"{cfg['icon']} Predicted Next {cfg['label']}", prediction)
+m2.metric("95% Range", f"{conf_low} – {conf_high}")
+m3.metric("Trend", f"{'↑' if slope >= 0 else '↓'} {abs(round(slope, 2))} per match")
+m4.metric("Avg (last {})".format(n), round(y.mean(), 2))
+
+# ── Chart ─────────────────────────────────────────────────────
+fig = go.Figure()
+
+# Confidence band
+x_band = list(x) + [next_x]
+y_upper = list(y_hat + t95 * se) + [conf_high]
+y_lower = list(y_hat - t95 * se) + [conf_low]
+y_lower = [max(0, v) for v in y_lower]
+
+fig.add_trace(go.Scatter(
+    x=x_band + x_band[::-1],
+    y=y_upper + y_lower[::-1],
+    fill="toself",
+    fillcolor=cfg["color"] + "22",
+    line=dict(color="rgba(0,0,0,0)"),
+    hoverinfo="skip",
+    showlegend=False,
+    name="95% CI"
+))
+
+# Trend line
+x_line = list(x) + [next_x]
+y_line = [slope * xi + intercept for xi in x_line]
+fig.add_trace(go.Scatter(
+    x=x_line, y=y_line,
+    mode="lines",
+    name="Trend",
+    line=dict(color=cfg["color"], width=2, dash="dash"),
+))
+
+# Actual scores
+fig.add_trace(go.Scatter(
+    x=list(x), y=list(y),
+    mode="markers+lines",
+    name="Actual",
+    marker=dict(size=9, color=cfg["color"], line=dict(color="#fff", width=1.5)),
+    line=dict(color=cfg["color"], width=1.5),
+))
+
+# Prediction point
+fig.add_trace(go.Scatter(
+    x=[next_x], y=[prediction],
+    mode="markers",
+    name=f"Prediction (Match {int(next_x)})",
+    marker=dict(size=14, color="#facc15", symbol="star",
+                line=dict(color="#fff", width=1.5)),
+))
+
+fig.update_layout(
+    plot_bgcolor="rgba(0,0,0,0)",
+    paper_bgcolor="rgba(0,0,0,0)",
+    font_color="#e8ecf4",
+    xaxis=dict(title="Match #", gridcolor="#252c3d", tickvals=list(range(1, int(next_x) + 1))),
+    yaxis=dict(title=cfg["label"], gridcolor="#252c3d"),
+    legend=dict(orientation="h", y=1.12),
+    margin=dict(t=20, b=20, l=0, r=0),
+    title=dict(
+        text=f"{selected_label.split(' (')[0]} — {sport_choice} {cfg['label']} Prediction",
+        font=dict(size=15, color="#e8ecf4")
+    )
+)
+st.plotly_chart(fig, use_container_width=True)
+
+# ── Save to DB ────────────────────────────────────────────────
+st.divider()
+if st.button("💾 Save Prediction to Database", use_container_width=True):
+    run_query(
+        "INSERT INTO Predictions (Player_ID, Sport_Name, Predicted_Score) VALUES (%s, %s, %s)",
+        (pid, sport_choice, prediction), fetch=False
+    )
+    st.toast(f"Prediction saved: {prediction} {cfg['label']} for {selected_label.split(' (')[0]}", icon="✅")
+
+# ── Past Predictions ──────────────────────────────────────────
+with st.expander("📋 Saved Predictions from MySQL"):
+    past = run_query("""
+        SELECT p.Player_Name, pr.Sport_Name,
+               pr.Predicted_Score, pr.Predicted_At
+        FROM Predictions pr
+        JOIN Players p ON pr.Player_ID = p.Player_ID
+        ORDER BY pr.Predicted_At DESC
+        LIMIT 20
+    """)
+    if past:
+        st.dataframe(pd.DataFrame(past), use_container_width=True, hide_index=True)
+    else:
+        st.info("No predictions saved yet. Run the predictor and click Save.")
+
+st.caption("ARENA SNU · ML Module · System Architect: Mudit | numpy linear regression → MySQL Predictions table")
