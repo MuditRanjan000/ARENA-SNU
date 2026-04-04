@@ -1,5 +1,5 @@
-# page_comparison.py — ARENA SNU Player Comparison Tool
-# Novel Feature — System Architect: Mudit
+# page_comparison.py — ARENA SNU Player Comparison Tool v6
+# All 6 sports · Radar chart · System Architect: Mudit
 import streamlit as st
 import plotly.graph_objects as go
 import pandas as pd
@@ -23,20 +23,22 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
+
 def hex_rgba(hex_color, alpha=0.15):
     h = hex_color.lstrip("#")
     r, g, b = int(h[0:2], 16), int(h[2:4], 16), int(h[4:6], 16)
     return f"rgba({r},{g},{b},{alpha})"
+
 
 st.markdown("""
 <div style="padding:20px 0 6px">
   <h2 style="background:linear-gradient(90deg,#6c63ff,#a855f7);-webkit-background-clip:text;
      -webkit-text-fill-color:transparent;font-size:2rem;font-weight:800;margin:0">⚔️ Player Comparison</h2>
   <p style="color:#6b7a99;font-size:.875rem;margin-top:4px">
-    Head-to-head stat comparison across any two players · Radar chart · Live from MySQL</p>
+    Head-to-head across all 6 sports · Radar chart · Live from MySQL</p>
 </div>
 """, unsafe_allow_html=True)
-st.info("💡 **How to use:** Pick a sport, then select two different players. The radar chart and table update instantly from MySQL.")
+st.info("💡 **How to use:** Pick a sport, then select two different players. Radar chart and table update instantly.")
 st.divider()
 
 SPORT_QUERIES = {
@@ -52,7 +54,7 @@ SPORT_QUERIES = {
                    IFNULL(COUNT(DISTINCT Match_ID),0) AS Matches
             FROM Scorecard_Cricket WHERE Player_ID={pid}
         """),
-        "axes": ["Runs", "Wickets", "Catches", "Overs", "Matches"],
+        "axes": ["Runs","Wickets","Catches","Overs","Matches"],
         "color_a": "#a855f7", "color_b": "#22c55e",
     },
     "⚽ Football": {
@@ -67,7 +69,7 @@ SPORT_QUERIES = {
                    IFNULL(COUNT(DISTINCT Match_ID),0) AS Matches
             FROM Scorecard_Football WHERE Player_ID={pid}
         """),
-        "axes": ["Goals", "Assists", "Yellow_Cards", "Red_Cards", "Matches"],
+        "axes": ["Goals","Assists","Yellow_Cards","Red_Cards","Matches"],
         "color_a": "#22c55e", "color_b": "#f97316",
     },
     "🏀 Basketball": {
@@ -82,8 +84,53 @@ SPORT_QUERIES = {
                    IFNULL(COUNT(DISTINCT Match_ID),0) AS Matches
             FROM Scorecard_Basketball WHERE Player_ID={pid}
         """),
-        "axes": ["Points", "Rebounds", "Assists", "Steals", "Matches"],
+        "axes": ["Points","Rebounds","Assists","Steals","Matches"],
         "color_a": "#f97316", "color_b": "#3b82f6",
+    },
+    "🏸 Badminton": {
+        "players": """
+            SELECT DISTINCT p.Player_ID, p.Player_Name, t.Team_Name
+            FROM Scorecard_Badminton sb JOIN Players p ON sb.Player_ID=p.Player_ID
+            JOIN Teams t ON p.Team_ID=t.Team_ID ORDER BY p.Player_Name
+        """,
+        "stats": lambda pid: run_query(f"""
+            SELECT IFNULL(SUM(Sets_Won),0) AS Sets_Won, IFNULL(SUM(Sets_Lost),0) AS Sets_Lost,
+                   IFNULL(SUM(Points_Won),0) AS Points_Won,
+                   IFNULL(COUNT(DISTINCT Match_ID),0) AS Matches
+            FROM Scorecard_Badminton WHERE Player_ID={pid}
+        """),
+        "axes": ["Sets_Won","Sets_Lost","Points_Won","Matches"],
+        "color_a": "#06b6d4", "color_b": "#a855f7",
+    },
+    "🏓 Table Tennis": {
+        "players": """
+            SELECT DISTINCT p.Player_ID, p.Player_Name, t.Team_Name
+            FROM Scorecard_TableTennis stt JOIN Players p ON stt.Player_ID=p.Player_ID
+            JOIN Teams t ON p.Team_ID=t.Team_ID ORDER BY p.Player_Name
+        """,
+        "stats": lambda pid: run_query(f"""
+            SELECT IFNULL(SUM(Games_Won),0) AS Games_Won, IFNULL(SUM(Games_Lost),0) AS Games_Lost,
+                   IFNULL(SUM(Points_Won),0) AS Points_Won,
+                   IFNULL(COUNT(DISTINCT Match_ID),0) AS Matches
+            FROM Scorecard_TableTennis WHERE Player_ID={pid}
+        """),
+        "axes": ["Games_Won","Games_Lost","Points_Won","Matches"],
+        "color_a": "#ec4899", "color_b": "#22c55e",
+    },
+    "🏐 Volleyball": {
+        "players": """
+            SELECT DISTINCT p.Player_ID, p.Player_Name, t.Team_Name
+            FROM Scorecard_Volleyball sv JOIN Players p ON sv.Player_ID=p.Player_ID
+            JOIN Teams t ON p.Team_ID=t.Team_ID ORDER BY p.Player_Name
+        """,
+        "stats": lambda pid: run_query(f"""
+            SELECT IFNULL(SUM(Kills),0) AS Kills, IFNULL(SUM(Blocks),0) AS Blocks,
+                   IFNULL(SUM(Aces),0) AS Aces, IFNULL(SUM(Digs),0) AS Digs,
+                   IFNULL(COUNT(DISTINCT Match_ID),0) AS Matches
+            FROM Scorecard_Volleyball WHERE Player_ID={pid}
+        """),
+        "axes": ["Kills","Blocks","Aces","Digs","Matches"],
+        "color_a": "#f59e0b", "color_b": "#3b82f6",
     },
 }
 
@@ -137,7 +184,6 @@ with chart_col:
     st.subheader("Radar Chart")
     fig = go.Figure()
     theta = axes + [axes[0]]
-
     fig.add_trace(go.Scatterpolar(
         r=norm_a + [norm_a[0]], theta=theta, fill="toself",
         name=player_a_label.split(" (")[0],
@@ -153,15 +199,15 @@ with chart_col:
     fig.update_layout(
         polar=dict(
             bgcolor="rgba(0,0,0,0)",
-            radialaxis=dict(visible=True, range=[0, 110], gridcolor="#252c3d",
+            radialaxis=dict(visible=True, range=[0,110], gridcolor="#252c3d",
                             linecolor="#252c3d", tickfont=dict(color="#6b7a99", size=9),
-                            tickvals=[25, 50, 75, 100]),
+                            tickvals=[25,50,75,100]),
             angularaxis=dict(gridcolor="#252c3d", linecolor="#252c3d",
                              tickfont=dict(color="#e8ecf4", size=12)),
         ),
         paper_bgcolor="rgba(0,0,0,0)", font_color="#e8ecf4", showlegend=True,
         legend=dict(orientation="h", yanchor="bottom", y=-0.18, xanchor="center", x=0.5),
-        margin=dict(t=20, b=40, l=40, r=40),
+        margin=dict(t=20,b=40,l=40,r=40),
     )
     st.plotly_chart(fig, use_container_width=True)
     st.caption("Values normalized 0–100 relative to the higher player per stat.")
@@ -172,10 +218,12 @@ with stats_col:
     for stat, va, vb in zip(axes, vals_a, vals_b):
         winner = f"🟣 {player_a_label.split(' (')[0]}" if va > vb else (
                  f"🟢 {player_b_label.split(' (')[0]}" if vb > va else "🤝 Tied")
-        rows.append({"Stat": stat.replace("_", " "),
-                     player_a_label.split(" (")[0]: int(va),
-                     player_b_label.split(" (")[0]: int(vb),
-                     "Edge": winner})
+        rows.append({
+            "Stat": stat.replace("_", " "),
+            player_a_label.split(" (")[0]: int(va),
+            player_b_label.split(" (")[0]: int(vb),
+            "Edge": winner
+        })
 
     cmp_df = pd.DataFrame(rows)
     def highlight_edge(val):
@@ -206,33 +254,4 @@ with stats_col:
         st.markdown("""<div style="padding:14px 18px;border-radius:10px;border-left:4px solid #6b7a99;
         background:rgba(107,122,153,.07)">🤝 Perfectly even match!</div>""", unsafe_allow_html=True)
 
-st.divider()
-with st.expander("📋 Match-by-Match History"):
-    table_map = {
-        "🏏 Cricket":    ("Scorecard_Cricket",    "Runs_Scored", "Stat_ID"),
-        "⚽ Football":   ("Scorecard_Football",   "Goals",       "Stat_ID"),
-        "🏀 Basketball": ("Scorecard_Basketball", "Points",      "Stat_ID"),
-    }
-    tbl, metric, id_col = table_map[sport_choice]
-    hist_a = run_query(f"SELECT {id_col} AS N, {metric} AS Score FROM {tbl} WHERE Player_ID={pid_a} ORDER BY {id_col}")
-    hist_b = run_query(f"SELECT {id_col} AS N, {metric} AS Score FROM {tbl} WHERE Player_ID={pid_b} ORDER BY {id_col}")
-
-    if hist_a or hist_b:
-        fig2 = go.Figure()
-        if hist_a:
-            fig2.add_trace(go.Scatter(x=list(range(1,len(hist_a)+1)), y=[r["Score"] for r in hist_a],
-                mode="lines+markers", name=player_a_label.split(" (")[0],
-                line=dict(color=cfg["color_a"], width=2), marker=dict(size=7, color=cfg["color_a"])))
-        if hist_b:
-            fig2.add_trace(go.Scatter(x=list(range(1,len(hist_b)+1)), y=[r["Score"] for r in hist_b],
-                mode="lines+markers", name=player_b_label.split(" (")[0],
-                line=dict(color=cfg["color_b"], width=2), marker=dict(size=7, color=cfg["color_b"])))
-        fig2.update_layout(plot_bgcolor="rgba(0,0,0,0)", paper_bgcolor="rgba(0,0,0,0)",
-            font_color="#e8ecf4", xaxis=dict(title="Entry #", gridcolor="#252c3d"),
-            yaxis=dict(title=metric.replace("_"," "), gridcolor="#252c3d"),
-            legend=dict(orientation="h", y=1.1), margin=dict(t=10,b=0,l=0,r=0))
-        st.plotly_chart(fig2, use_container_width=True)
-    else:
-        st.info("No individual match history available.")
-
-st.caption("ARENA SNU · Novel Feature: Player Comparison Tool · System Architect: Mudit")
+st.caption("ARENA SNU v6 · Player Comparison Tool · System Architect: Mudit")
