@@ -1,238 +1,190 @@
-# page_cricket.py — ARENA SNU Cricket Module (v5)
-# Assigned: Ashank | Reviewed & improved: Mudit
-import streamlit as st
-import time
+# page_cricket.py — ARENA SNU Cricket Module v7
+# SURGE 2025 · Assigned: Ashank · Reviewed: Mudit
+import streamlit as st, time, pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
-import pandas as pd
 from db_connection import run_query
 
-try:
-    st.set_page_config(page_title="Cricket — ARENA SNU", page_icon="🏏", layout="wide")
-except Exception:
-    pass
+try: st.set_page_config(page_title="Cricket — ARENA SNU", page_icon="🏏", layout="wide")
+except: pass
+
+st.markdown("""<style>
+div.stButton>button{background:linear-gradient(135deg,#5b52f5,#9333ea);color:#fff;
+font-weight:700;border-radius:10px;border:none;transition:all .25s}
+div.stButton>button:hover{transform:translateY(-2px);box-shadow:0 8px 28px rgba(91,82,245,.5)}
+footer{visibility:hidden}</style>""", unsafe_allow_html=True)
 
 st.markdown("""
-<style>
-    div.stButton > button {
-        background: linear-gradient(90deg, #6c63ff, #a855f7);
-        color: white; font-weight: 700; border-radius: 8px;
-        border: none; transition: all .3s;
-    }
-    div.stButton > button:hover { transform: scale(1.02); box-shadow: 0 4px 20px rgba(108,99,255,.45); }
-    footer { visibility: hidden; }
-</style>
-""", unsafe_allow_html=True)
-
-st.markdown("""
-<h2 style="background:linear-gradient(90deg,#a855f7,#6c63ff);
-   -webkit-background-clip:text;-webkit-text-fill-color:transparent;
-   font-size:2rem;font-weight:800;margin:0">🏏 Cricket Module</h2>
-<p style="color:#6b7a99;font-size:.875rem;margin-top:4px">T20 Format · Score Entry · Leaderboards · Player Form</p>
+<h2 style="background:linear-gradient(90deg,#a855f7,#5b52f5);-webkit-background-clip:text;
+-webkit-text-fill-color:transparent;font-family:'Rajdhani',sans-serif;
+font-size:2rem;font-weight:700;margin:0">🏏 Cricket Module</h2>
+<p style="color:#4a5568;font-size:.875rem;margin-top:4px">
+T20 Format · Score Entry · Orange/Purple Cap · Player Form</p>
 """, unsafe_allow_html=True)
 st.divider()
 
-# Role check — organisers get score entry tab, others only see leaderboards
-user_role = st.session_state.get("role", "viewer")
-CAN_ENTER = user_role in ("admin", "organiser")
+role      = st.session_state.get("role","viewer")
+CAN_ENTER = role in ("admin","organiser")
+tabs      = st.tabs(["📝 Enter Score","📊 Leaderboards","🔥 Player Form"] if CAN_ENTER
+                    else ["📊 Leaderboards","🔥 Player Form"])
+tab_entry  = tabs[0] if CAN_ENTER else None
+tab_boards = tabs[1] if CAN_ENTER else tabs[0]
+tab_form   = tabs[2] if CAN_ENTER else tabs[1]
 
-tabs = ["📝 Enter Score", "📊 Leaderboards", "🔥 Player Form"] if CAN_ENTER else ["📊 Leaderboards", "🔥 Player Form"]
-tab_list = st.tabs(tabs)
-
-tab_entry  = tab_list[0] if CAN_ENTER else None
-tab_boards = tab_list[1] if CAN_ENTER else tab_list[0]
-tab_form   = tab_list[2] if CAN_ENTER else tab_list[1]
-
-# ═══════════════════════ TAB: SCORE ENTRY ═══════════════════
+# ── ENTRY ─────────────────────────────────────────────────────
 if CAN_ENTER:
     with tab_entry:
-        matches_data = run_query("""
+        matches = run_query("""
             SELECT m.Match_ID,
-                   CONCAT(ta.Team_Name, ' vs ', tb.Team_Name, '  (', m.Match_Date, ')  [', m.Stage, ']') AS Match_Desc
+                   CONCAT(ta.Team_Name,' vs ',tb.Team_Name,' (',m.Match_Date,') [',m.Stage,']') AS Match_Desc,
+                   m.Team_A_ID, m.Team_B_ID
             FROM Matches m
-            JOIN Teams ta ON m.Team_A_ID=ta.Team_ID
-            JOIN Teams tb ON m.Team_B_ID=tb.Team_ID
-            WHERE m.Sport_ID=1 AND m.Status='Scheduled'
-            ORDER BY m.Match_Date
+            JOIN Teams ta ON m.Team_A_ID=ta.Team_ID JOIN Teams tb ON m.Team_B_ID=tb.Team_ID
+            WHERE m.Sport_ID=1 AND m.Status='Scheduled' ORDER BY m.Match_Date
         """)
-
-        if not matches_data:
-            st.warning("⚠️ No scheduled cricket matches available. Schedule a match first.")
+        if not matches:
+            st.warning("⚠️ No scheduled cricket matches found. Schedule one first.")
         else:
-            match_df   = pd.DataFrame(matches_data)
-            match_dict = dict(zip(match_df["Match_Desc"], match_df["Match_ID"]))
-            selected_match_desc = st.selectbox("Select Match", list(match_dict.keys()))
-            match_id = match_dict[selected_match_desc]
+            md = {r["Match_Desc"]: r for r in matches}
+            sel = md[st.selectbox("Select Match", list(md.keys()))]
+            mid = sel["Match_ID"]
 
-            players_data = run_query(f"""
+            players = run_query("""
                 SELECT p.Player_ID,
-                       CONCAT(p.Player_Name, '  (', t.Team_Name, ')  — ', p.Role) AS Player_Desc
-                FROM Players p
-                JOIN Teams t ON p.Team_ID=t.Team_ID
-                JOIN Matches m ON (t.Team_ID=m.Team_A_ID OR t.Team_ID=m.Team_B_ID)
-                WHERE m.Match_ID={match_id}
-                ORDER BY t.Team_Name, p.Player_Name
-            """)
-
-            if not players_data:
-                st.warning("⚠️ No players found for this match.")
+                       CONCAT(p.Player_Name,'  (',t.Team_Name,')  — ',p.Role) AS PDesc
+                FROM Players p JOIN Teams t ON p.Team_ID=t.Team_ID
+                WHERE p.Team_ID IN (%s,%s) ORDER BY t.Team_Name, p.Player_Name
+            """, (sel["Team_A_ID"], sel["Team_B_ID"]))
+            if not players:
+                st.warning("⚠️ No players for these teams.")
             else:
-                player_df   = pd.DataFrame(players_data)
-                player_dict = dict(zip(player_df["Player_Desc"], player_df["Player_ID"]))
-                selected_player_desc = st.selectbox("Select Player", list(player_dict.keys()))
-                player_id = player_dict[selected_player_desc]
+                pd2 = {r["PDesc"]: r["Player_ID"] for r in players}
+                pid = pd2[st.selectbox("Select Player", list(pd2.keys()))]
 
-                existing = run_query(f"""
-                    SELECT Runs_Scored, Wickets_Taken, Overs_Bowled, Catches
-                    FROM Scorecard_Cricket
-                    WHERE Match_ID={match_id} AND Player_ID={player_id}
-                """)
-                if existing:
-                    ex = existing[0]
-                    st.markdown("""<div style="padding:10px 16px;border-radius:8px;border-left:3px solid #f59e0b;
-                    background:rgba(245,158,11,.07);font-size:13px;margin-bottom:8px">
-                        ⚠️ Entry already exists. Submitting will add another record.</div>""",
-                    unsafe_allow_html=True)
-                    st.caption(f"Existing → Runs: {ex['Runs_Scored']} | Wickets: {ex['Wickets_Taken']} | Overs: {ex['Overs_Bowled']} | Catches: {ex['Catches']}")
+                ex = run_query("SELECT Runs_Scored,Wickets_Taken,Overs_Bowled,Catches "
+                               "FROM Scorecard_Cricket WHERE Match_ID=%s AND Player_ID=%s",
+                               (mid, pid))
+                if ex:
+                    e=ex[0]
+                    st.info(f"⚠️ Existing entry — Runs: {e['Runs_Scored']} | Wkts: {e['Wickets_Taken']} "
+                            f"| Overs: {e['Overs_Bowled']} | Catches: {e['Catches']}")
 
-                with st.form("score_form", clear_on_submit=True):
-                    col1, col2 = st.columns(2)
-                    with col1:
+                with st.form("cricket_form", clear_on_submit=True):
+                    c1,c2 = st.columns(2)
+                    with c1:
                         runs    = st.number_input("Runs Scored",   min_value=0, max_value=200)
                         wickets = st.number_input("Wickets Taken", min_value=0, max_value=10)
-                    with col2:
+                    with c2:
                         overs   = st.number_input("Overs Bowled",  min_value=0.0, max_value=20.0, step=0.1)
-                        catches = st.number_input("Catches",       min_value=0, max_value=10)
+                        catches = st.number_input("Catches",        min_value=0, max_value=10)
+                    sub = st.form_submit_button("🏏 Submit Score", use_container_width=True)
 
-                    submitted = st.form_submit_button("🏏 Submit Score", use_container_width=True)
-
-                if submitted:
-                    over_decimal = round(overs % 1, 1)
-                    if over_decimal > 0.5:
+                if sub:
+                    if round(overs % 1, 1) > 0.5:
                         st.error("❌ Invalid overs — decimal must be 0–5 (e.g. 3.4, not 3.7)")
                     else:
-                        with st.spinner("Recording to MySQL…"):
+                        with st.spinner("Writing to MySQL…"):
                             run_query(
                                 "INSERT INTO Scorecard_Cricket "
-                                "(Match_ID, Player_ID, Runs_Scored, Wickets_Taken, Overs_Bowled, Catches) "
-                                "VALUES (%s, %s, %s, %s, %s, %s)",
-                                (match_id, player_id, runs, wickets, overs, catches), fetch=False
+                                "(Match_ID,Player_ID,Runs_Scored,Wickets_Taken,Overs_Bowled,Catches) "
+                                "VALUES (%s,%s,%s,%s,%s,%s)",
+                                (mid,pid,runs,wickets,overs,catches), fetch=False
                             )
-                            time.sleep(0.5)
-                        st.toast("Score recorded! Form status auto-updated by trigger.", icon="✅")
-                        time.sleep(1)
-                        st.rerun()
+                            time.sleep(0.4)
+                        st.toast("Score recorded! trg_player_form fired.", icon="✅")
+                        time.sleep(1); st.rerun()
 
-else:
-    # Non-organiser attempting score entry → show notice
-    pass  # Tab is hidden for non-organisers
-
-# ════════════════════════ TAB: LEADERBOARDS ═════════════════
+# ── LEADERBOARDS ──────────────────────────────────────────────
 with tab_boards:
-    board_left, board_right = st.columns(2)
+    if not CAN_ENTER:
+        st.info("🔒 Score entry restricted to Organisers.")
+    left, right = st.columns(2)
 
-    with board_left:
+    with left:
         st.subheader("🏅 Orange Cap — Top Runs")
-        oc_data = run_query("""
-            SELECT p.Player_Name, t.Team_Name, t.University,
-                   SUM(sc.Runs_Scored) AS Runs,
-                   COUNT(DISTINCT sc.Match_ID) AS Innings
-            FROM Scorecard_Cricket sc
-            JOIN Players p ON sc.Player_ID=p.Player_ID
-            JOIN Teams t ON p.Team_ID=t.Team_ID
-            GROUP BY sc.Player_ID ORDER BY Runs DESC
+        oc = run_query("""
+            SELECT p.Player_Name,t.Team_Name,t.University,
+                   SUM(sc.Runs_Scored) AS Runs, COUNT(DISTINCT sc.Match_ID) AS Innings
+            FROM Scorecard_Cricket sc JOIN Players p ON sc.Player_ID=p.Player_ID
+            JOIN Teams t ON p.Team_ID=t.Team_ID GROUP BY sc.Player_ID ORDER BY Runs DESC
         """)
-        if oc_data:
-            oc_df = pd.DataFrame(oc_data)
-            oc_df.insert(0, "Rank", range(1, len(oc_df) + 1))
-            def hl_top(row): return ["background-color:rgba(168,85,247,.12)"]*len(row) if row["Rank"]==1 else [""]*len(row)
-            st.dataframe(oc_df.style.apply(hl_top, axis=1), use_container_width=True, hide_index=True)
-            fig = px.bar(oc_df.head(8), x="Player_Name", y="Runs", color="Team_Name",
-                         color_discrete_sequence=px.colors.qualitative.Vivid,
-                         labels={"Player_Name":"Player","Runs":"Total Runs"}, title="Top Run Scorers")
-            fig.update_layout(plot_bgcolor="rgba(0,0,0,0)", paper_bgcolor="rgba(0,0,0,0)",
-                              font_color="#e8ecf4", showlegend=False, margin=dict(t=36,b=0,l=0,r=0),
-                              xaxis=dict(gridcolor="#252c3d"), yaxis=dict(gridcolor="#252c3d"))
-            st.plotly_chart(fig, use_container_width=True)
+        if oc:
+            df=pd.DataFrame(oc); df.insert(0,"Rank",range(1,len(df)+1))
+            def hl(r): return ["background:rgba(168,85,247,.12)"]*len(r) if r["Rank"]==1 else [""]*len(r)
+            st.dataframe(df.style.apply(hl,axis=1),use_container_width=True,hide_index=True)
+            fig=px.bar(df.head(8),x="Player_Name",y="Runs",color="Team_Name",
+                       color_discrete_sequence=px.colors.qualitative.Vivid,
+                       title="Top Run Scorers")
+            fig.update_layout(plot_bgcolor="rgba(0,0,0,0)",paper_bgcolor="rgba(0,0,0,0)",
+                              font_color="#e8ecf4",showlegend=False,
+                              margin=dict(t=36,b=0,l=0,r=0),
+                              xaxis=dict(gridcolor="#1e2d45"),yaxis=dict(gridcolor="#1e2d45"))
+            st.plotly_chart(fig,use_container_width=True)
         else:
             st.info("No batting data yet.")
 
-    with board_right:
+    with right:
         st.subheader("💜 Purple Cap — Top Wickets")
-        pc_data = run_query("""
-            SELECT p.Player_Name, t.Team_Name,
-                   SUM(sc.Wickets_Taken) AS Wickets,
-                   ROUND(SUM(sc.Overs_Bowled),1) AS Overs_Bowled
-            FROM Scorecard_Cricket sc
-            JOIN Players p ON sc.Player_ID=p.Player_ID
+        pc = run_query("""
+            SELECT p.Player_Name,t.Team_Name,SUM(sc.Wickets_Taken) AS Wickets,
+                   ROUND(SUM(sc.Overs_Bowled),1) AS Overs
+            FROM Scorecard_Cricket sc JOIN Players p ON sc.Player_ID=p.Player_ID
             JOIN Teams t ON p.Team_ID=t.Team_ID
-            GROUP BY sc.Player_ID HAVING Wickets > 0 ORDER BY Wickets DESC
+            GROUP BY sc.Player_ID HAVING Wickets>0 ORDER BY Wickets DESC
         """)
-        if pc_data:
-            pc_df = pd.DataFrame(pc_data)
-            pc_df.insert(0, "Rank", range(1, len(pc_df) + 1))
-            def hl_top_pc(row): return ["background-color:rgba(168,85,247,.12)"]*len(row) if row["Rank"]==1 else [""]*len(row)
-            st.dataframe(pc_df.style.apply(hl_top_pc, axis=1), use_container_width=True, hide_index=True)
-            fig2 = px.bar(pc_df.head(8), x="Player_Name", y="Wickets", color="Team_Name",
-                          color_discrete_sequence=["#a855f7","#8b5cf6","#7c3aed","#6d28d9"],
-                          labels={"Player_Name":"Player","Wickets":"Total Wickets"}, title="Top Wicket Takers")
-            fig2.update_layout(plot_bgcolor="rgba(0,0,0,0)", paper_bgcolor="rgba(0,0,0,0)",
-                               font_color="#e8ecf4", showlegend=False, margin=dict(t=36,b=0,l=0,r=0),
-                               xaxis=dict(gridcolor="#252c3d"), yaxis=dict(gridcolor="#252c3d"))
-            st.plotly_chart(fig2, use_container_width=True)
+        if pc:
+            df2=pd.DataFrame(pc); df2.insert(0,"Rank",range(1,len(df2)+1))
+            def hl2(r): return ["background:rgba(91,82,245,.12)"]*len(r) if r["Rank"]==1 else [""]*len(r)
+            st.dataframe(df2.style.apply(hl2,axis=1),use_container_width=True,hide_index=True)
+            fig2=px.bar(df2.head(8),x="Player_Name",y="Wickets",
+                        color_discrete_sequence=["#a855f7"],title="Top Wicket Takers")
+            fig2.update_layout(plot_bgcolor="rgba(0,0,0,0)",paper_bgcolor="rgba(0,0,0,0)",
+                               font_color="#e8ecf4",showlegend=False,
+                               margin=dict(t=36,b=0,l=0,r=0),
+                               xaxis=dict(gridcolor="#1e2d45"),yaxis=dict(gridcolor="#1e2d45"))
+            st.plotly_chart(fig2,use_container_width=True)
         else:
             st.info("No bowling data yet.")
 
     st.divider()
     with st.expander("📋 Full Scorecard — All Players"):
-        full_data = run_query("""
-            SELECT p.Player_Name, t.Team_Name,
-                   SUM(sc.Runs_Scored) AS Total_Runs, SUM(sc.Wickets_Taken) AS Total_Wickets,
-                   ROUND(SUM(sc.Overs_Bowled),1) AS Total_Overs, SUM(sc.Catches) AS Total_Catches,
-                   COUNT(DISTINCT sc.Match_ID) AS Matches
-            FROM Scorecard_Cricket sc
-            JOIN Players p ON sc.Player_ID=p.Player_ID
-            JOIN Teams t ON p.Team_ID=t.Team_ID
-            GROUP BY sc.Player_ID ORDER BY Total_Runs DESC
+        full = run_query("""
+            SELECT p.Player_Name,t.Team_Name,SUM(sc.Runs_Scored) AS Runs,
+                   SUM(sc.Wickets_Taken) AS Wickets,ROUND(SUM(sc.Overs_Bowled),1) AS Overs,
+                   SUM(sc.Catches) AS Catches,COUNT(DISTINCT sc.Match_ID) AS Matches
+            FROM Scorecard_Cricket sc JOIN Players p ON sc.Player_ID=p.Player_ID
+            JOIN Teams t ON p.Team_ID=t.Team_ID GROUP BY sc.Player_ID ORDER BY Runs DESC
         """)
-        if full_data:
-            st.dataframe(pd.DataFrame(full_data), use_container_width=True, hide_index=True)
-        else:
-            st.info("No scorecard data available.")
+        if full: st.dataframe(pd.DataFrame(full),use_container_width=True,hide_index=True)
+        else:    st.info("No data yet.")
 
-# ════════════════════════ TAB: PLAYER FORM ══════════════════
+# ── FORM TRACKER ──────────────────────────────────────────────
 with tab_form:
     st.subheader("🔥 Player Form Tracker")
     st.markdown("""
-    <div style="padding:10px 16px;border-radius:8px;border-left:3px solid #6c63ff;
-    background:rgba(108,99,255,.07);font-size:13px;margin-bottom:16px">
-        Form is updated by <strong>trg_player_form</strong> after every score entry.
-        🟢 In Form = last-5 avg ≥ 120% of overall · 🔴 Out of Form = ≤ 80%
+    <div style="padding:10px 16px;border-radius:8px;border-left:3px solid #5b52f5;
+    background:rgba(91,82,245,.07);font-size:13px;margin-bottom:16px">
+    Form auto-updated by <code>trg_player_form</code> after every score entry.
+    🟢 In Form = last-5 avg ≥ 120% of overall · 🔴 Out of Form = ≤ 80%
     </div>""", unsafe_allow_html=True)
-
-    form_data = run_query("""
-        SELECT p.Player_Name, t.Team_Name, p.Form_Status,
-               IFNULL(ROUND(AVG(sc.Runs_Scored),1),'—') AS Avg_Runs,
+    fdata = run_query("""
+        SELECT p.Player_Name,t.Team_Name,p.Form_Status,
+               ROUND(IFNULL(AVG(sc.Runs_Scored),0),1) AS Avg_Runs,
                IFNULL(SUM(sc.Wickets_Taken),0) AS Wickets
-        FROM Players p
-        JOIN Teams t ON p.Team_ID=t.Team_ID
+        FROM Players p JOIN Teams t ON p.Team_ID=t.Team_ID
         LEFT JOIN Scorecard_Cricket sc ON sc.Player_ID=p.Player_ID
         WHERE t.Sport_ID=1
         GROUP BY p.Player_ID
         ORDER BY CASE p.Form_Status WHEN 'In Form' THEN 1 WHEN 'Neutral' THEN 2 ELSE 3 END, Avg_Runs DESC
     """)
-
-    if form_data:
-        form_df = pd.DataFrame(form_data)
-        form_df["Status"] = form_df["Form_Status"].map({
-            "In Form":"🔥 In Form","Out of Form":"❄️ Out of Form","Neutral":"➖ Neutral"
-        }).fillna("➖ Neutral")
-        def color_status(val):
-            if "In Form" in str(val):     return "color:#10b981;font-weight:bold"
-            if "Out of Form" in str(val): return "color:#ef4444;font-weight:bold"
-            return "color:#6b7a99"
-        st.dataframe(form_df[["Player_Name","Team_Name","Status","Avg_Runs","Wickets"]]
-                     .style.map(color_status, subset=["Status"]),
-                     use_container_width=True, hide_index=True)
+    if fdata:
+        fdf=pd.DataFrame(fdata)
+        fdf["Status"]=fdf["Form_Status"].map({"In Form":"🔥 In Form","Out of Form":"❄️ Out of Form","Neutral":"➖ Neutral"}).fillna("➖ Neutral")
+        def cf(v):
+            if "In Form" in str(v):     return "color:#4ade80;font-weight:bold"
+            if "Out of Form" in str(v): return "color:#f87171;font-weight:bold"
+            return "color:#4a5568"
+        st.dataframe(fdf[["Player_Name","Team_Name","Status","Avg_Runs","Wickets"]].style.map(cf,subset=["Status"]),
+                     use_container_width=True,hide_index=True)
     else:
         st.info("No player data available.")

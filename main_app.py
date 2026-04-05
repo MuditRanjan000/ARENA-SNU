@@ -1,149 +1,132 @@
 """
-main_app.py — ARENA SNU v6
-SURGE 2025 Sports Festival · Shiv Nadar University
+main_app.py — ARENA SNU v7
+SURGE 2025 · Cricket · Football · Basketball
 System Architect: Mudit
-All 6 sports · Public viewer access · Role-based routing · SURGE visual theme
 """
 import streamlit as st
 import importlib.util
 import os
 from db_connection import run_query
 
-st.set_page_config(page_title="ARENA SNU · SURGE 2025", page_icon="🏆", layout="wide",
-                   initial_sidebar_state="expanded")
+st.set_page_config(
+    page_title="ARENA SNU · SURGE 2025",
+    page_icon="🏆",
+    layout="wide",
+    initial_sidebar_state="expanded",
+)
 
 # ── GLOBAL CSS ────────────────────────────────────────────────
 st.markdown("""
 <style>
-@import url('https://fonts.googleapis.com/css2?family=Rajdhani:wght@600;700&family=Inter:wght@400;500;600&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Rajdhani:wght@500;600;700&family=DM+Sans:wght@400;500;600&display=swap');
 
-/* Root palette */
-:root {
-    --bg:       #0d1117;
-    --card:     #161b24;
-    --border:   #21262d;
-    --accent:   #6c63ff;
-    --accent2:  #a855f7;
-    --gold:     #f5a623;
-    --text:     #e8ecf4;
-    --muted:    #6b7a99;
+/* ── base ── */
+.stApp { background: #080c14; }
+.block-container { padding-top: 1.4rem !important; max-width: 1400px; }
+
+/* ── sidebar ── */
+section[data-testid="stSidebar"] {
+    background: #0a0f1a !important;
+    border-right: 1px solid #1a2235;
 }
 
-/* App background */
-.stApp { background: var(--bg); }
-section[data-testid="stSidebar"] { background: #0d1117 !important; border-right: 1px solid #21262d; }
-
-/* Remove default Streamlit top padding */
-.block-container { padding-top: 1.5rem !important; }
-
-/* Buttons */
+/* ── buttons ── */
 div.stButton > button {
-    background: linear-gradient(135deg, #6c63ff, #a855f7);
-    color: white; font-weight: 700; border-radius: 10px;
-    border: none; transition: all 0.25s ease;
-    font-family: 'Rajdhani', sans-serif; letter-spacing: 0.05em;
+    background: linear-gradient(135deg, #5b52f5 0%, #9333ea 100%);
+    color: #fff; font-family: 'Rajdhani', sans-serif;
+    font-weight: 700; font-size: 15px; letter-spacing: .04em;
+    border: none; border-radius: 10px;
+    transition: transform .2s ease, box-shadow .2s ease;
 }
 div.stButton > button:hover {
     transform: translateY(-2px);
-    box-shadow: 0 8px 25px rgba(108,99,255,0.5);
+    box-shadow: 0 8px 28px rgba(91,82,245,.5);
 }
-div.stButton > button:active { transform: translateY(0); }
-
-/* Primary button */
 div.stButton > button[kind="primary"] {
-    background: linear-gradient(135deg, #f5a623, #ef6820);
+    background: linear-gradient(135deg, #f5a623 0%, #ef4444 100%);
+}
+div.stButton > button[kind="primary"]:hover {
+    box-shadow: 0 8px 28px rgba(245,166,35,.45);
 }
 
-/* Metrics */
+/* ── metrics ── */
 [data-testid="stMetric"] {
-    background: var(--card);
-    border: 1px solid var(--border);
+    background: #101726;
+    border: 1px solid #1e2d45;
+    border-top: 3px solid #5b52f5;
     border-radius: 14px;
     padding: 16px 20px;
-    border-top: 3px solid var(--accent);
 }
-[data-testid="stMetricLabel"] { color: var(--muted) !important; font-size: 13px !important; }
-[data-testid="stMetricValue"] { color: var(--text) !important; font-weight: 700 !important; }
+[data-testid="stMetricLabel"] { color: #6b7a99 !important; font-size: 12px !important; }
+[data-testid="stMetricValue"] { color: #e8ecf4 !important; font-weight: 800 !important; }
 
-/* Tabs */
+/* ── tabs ── */
 .stTabs [data-baseweb="tab"] {
-    font-weight: 600;
     font-family: 'Rajdhani', sans-serif;
-    letter-spacing: 0.04em;
-    font-size: 15px;
+    font-weight: 600; font-size: 15px; letter-spacing: .03em;
 }
-.stTabs [aria-selected="true"] { color: var(--accent) !important; }
+.stTabs [aria-selected="true"] { color: #7c6cf7 !important; }
 
-/* Dataframe */
-[data-testid="stDataFrame"] { border-radius: 12px; overflow: hidden; }
-
-/* Sidebar nav radio */
-.stRadio > div { gap: 4px; }
-.stRadio > div > label {
-    padding: 8px 12px;
-    border-radius: 8px;
-    cursor: pointer;
-    transition: background 0.2s;
-}
-.stRadio > div > label:hover { background: rgba(108,99,255,0.08); }
-
-/* Info / warning / error boxes */
+/* ── alerts ── */
 div[data-testid="stAlert"] { border-radius: 10px; }
 
-/* Expander */
+/* ── radio nav (sidebar) ── */
+.stRadio label {
+    padding: 7px 12px;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: background .18s;
+    font-family: 'DM Sans', sans-serif;
+}
+.stRadio label:hover { background: rgba(91,82,245,.1); }
+
+/* ── dataframe ── */
+[data-testid="stDataFrame"] { border-radius: 12px; overflow: hidden; }
+
+/* ── expander ── */
 details summary { font-weight: 600; }
 
-/* Hide default footer */
 footer { visibility: hidden; }
 #MainMenu { visibility: hidden; }
 </style>
 """, unsafe_allow_html=True)
 
 # ── SESSION DEFAULTS ──────────────────────────────────────────
-if "logged_in" not in st.session_state:
-    st.session_state.logged_in = False
-if "username" not in st.session_state:
-    st.session_state.username = "Guest"
-if "role" not in st.session_state:
-    st.session_state.role = "viewer"
+for key, val in [("logged_in", False), ("username", "Guest"),
+                 ("role", "viewer"), ("_show_login", False)]:
+    if key not in st.session_state:
+        st.session_state[key] = val
 
-# ── PAGE DEFINITIONS ──────────────────────────────────────────
+# ── PAGE REGISTRY ─────────────────────────────────────────────
 PUBLIC_PAGES = ["🏠 Home Dashboard", "⚔️ Compare Players", "📈 Predictions"]
 
 ALL_PAGES = {
-    "🏠 Home Dashboard":   "home_page.py",
-    "📅 Schedule Match":   "page_schedule.py",
-    "🏏 Cricket":          "page_cricket.py",
-    "⚽ Football":         "page_football.py",
-    "🏀 Basketball":       "page_basketball.py",
-    "🏸 Badminton":        "page_badminton.py",
-    "🏓 Table Tennis":     "page_tabletennis.py",
-    "🏐 Volleyball":       "page_volleyball.py",
-    "⚔️ Compare Players":  "page_comparison.py",
-    "📈 Predictions":      "prediction.py",
-    "🔐 Admin Panel":      None,
+    "🏠 Home Dashboard":  "home_page.py",
+    "📅 Schedule Match":  "page_schedule.py",
+    "🏏 Cricket":         "page_cricket.py",
+    "⚽ Football":        "page_football.py",
+    "🏀 Basketball":      "page_basketball.py",
+    "⚔️ Compare Players": "page_comparison.py",
+    "📈 Predictions":     "prediction.py",
+    "🔐 Admin Panel":     None,
 }
 
 ROLE_ACCESS = {
     "admin":     list(ALL_PAGES.keys()),
-    "organiser": ["🏠 Home Dashboard", "🏏 Cricket", "⚽ Football", "🏀 Basketball",
-                  "🏸 Badminton", "🏓 Table Tennis", "🏐 Volleyball"],
-    "manager":   ["🏠 Home Dashboard", "📅 Schedule Match", "⚔️ Compare Players", "📈 Predictions"],
+    "organiser": ["🏠 Home Dashboard","🏏 Cricket","⚽ Football","🏀 Basketball"],
+    "manager":   ["🏠 Home Dashboard","📅 Schedule Match","⚔️ Compare Players","📈 Predictions"],
     "viewer":    PUBLIC_PAGES,
 }
 
 PAGE_HELP = {
     "🏠 Home Dashboard":  "Live standings, awards, team & player management",
     "📅 Schedule Match":  "Book a match — venue conflict prevention built in",
-    "🏏 Cricket":         "T20 scores, Orange/Purple Cap, player form tracker",
+    "🏏 Cricket":         "T20 scores, Orange Cap, Purple Cap, form tracker",
     "⚽ Football":        "Match stats, Golden Boot, suspension tracker",
-    "🏀 Basketball":      "Stats, MVP leaderboard, team charts",
-    "🏸 Badminton":       "Sets & points, Singles/Doubles leaderboards",
-    "🏓 Table Tennis":    "Games & points, Singles/Doubles categories",
-    "🏐 Volleyball":      "Kills, Blocks, Aces, Digs tracker",
+    "🏀 Basketball":      "Stats entry, MVP leaderboard, team charts",
     "⚔️ Compare Players": "Head-to-head radar chart across any two players",
     "📈 Predictions":     "ML linear regression — predict next match score",
-    "🔐 Admin Panel":     "Manage users, view DB audit log",
+    "🔐 Admin Panel":     "User management, audit trail, DB stats",
 }
 
 OWNERS = {
@@ -151,59 +134,51 @@ OWNERS = {
     "⚽ Football":       "Ayush",
     "🏀 Basketball":     "Amitog",
     "🏏 Cricket":        "Ashank",
-    "🏸 Badminton":      "Team",
-    "🏓 Table Tennis":   "Team",
-    "🏐 Volleyball":     "Team",
 }
 
-ROLE_COLORS = {
-    "admin":     "#a855f7",
-    "organiser": "#f97316",
-    "manager":   "#3b82f6",
-    "viewer":    "#22c55e",
+ROLE_PILL = {
+    "admin":     ("#a855f7", "ADMIN"),
+    "organiser": ("#f97316", "ORGANISER"),
+    "manager":   ("#3b82f6", "MANAGER"),
+    "viewer":    ("#22c55e", "VIEWER"),
 }
-
-SPORT_SECTIONS = {
-    "🏆 MANAGEMENT":    ["🏠 Home Dashboard", "📅 Schedule Match"],
-    "⚽ BALL SPORTS":   ["🏏 Cricket", "⚽ Football", "🏀 Basketball", "🏐 Volleyball"],
-    "🏸 RACKET SPORTS": ["🏸 Badminton", "🏓 Table Tennis"],
-    "🔬 ANALYTICS":     ["⚔️ Compare Players", "📈 Predictions"],
-    "🔐 ADMIN":         ["🔐 Admin Panel"],
-}
-
 
 # ── LOGIN PAGE ────────────────────────────────────────────────
 def login_page():
-    _, mid, _ = st.columns([1, 1.1, 1])
+    _, mid, _ = st.columns([1, 1.05, 1])
     with mid:
         st.markdown("""
-        <div style="text-align:center;padding:36px 0 24px">
-          <div style="font-size:4rem;margin-bottom:8px">🏆</div>
-          <h1 style="background:linear-gradient(90deg,#6c63ff,#a855f7,#f5a623);
-             -webkit-background-clip:text;-webkit-text-fill-color:transparent;
-             font-size:2.6rem;font-weight:800;margin:0;font-family:'Rajdhani',sans-serif;letter-spacing:-1px">
-             ARENA SNU</h1>
-          <p style="color:#6b7a99;margin-top:8px;font-size:.9rem;line-height:1.6">
-             Athletic Resource &amp; Event Navigation Application<br>
-             <strong style="color:#f5a623">SURGE 2025</strong> · Shiv Nadar University</p>
+        <div style="text-align:center;padding:40px 0 28px">
+          <div style="font-size:4.5rem;line-height:1">🏆</div>
+          <h1 style="
+            background:linear-gradient(100deg,#5b52f5,#a855f7,#f5a623);
+            -webkit-background-clip:text;-webkit-text-fill-color:transparent;
+            font-family:'Rajdhani',sans-serif;font-size:3rem;font-weight:700;
+            margin:10px 0 4px;letter-spacing:-1px">ARENA SNU</h1>
+          <p style="color:#4a5568;font-size:.9rem;margin:0">
+            Athletic Resource &amp; Event Navigation Application<br>
+            <strong style="color:#f5a623">SURGE 2025</strong> · Shiv Nadar University
+          </p>
         </div>
         """, unsafe_allow_html=True)
 
-        st.markdown("""<div style="background:#161b24;border:1px solid #21262d;
-        border-radius:16px;padding:32px 28px;margin-top:8px">""", unsafe_allow_html=True)
+        st.markdown("""<div style="background:#101726;border:1px solid #1e2d45;
+        border-radius:16px;padding:32px 28px">""", unsafe_allow_html=True)
 
         username = st.text_input("👤 Username", placeholder="Enter your username")
         password = st.text_input("🔑 Password", type="password", placeholder="Enter your password")
         st.markdown("<br>", unsafe_allow_html=True)
 
         if st.button("Login to ARENA →", use_container_width=True, type="primary"):
-            result = run_query("SELECT * FROM Users WHERE Username=%s AND Password=%s",
-                               (username, password), fetch=True)
+            result = run_query(
+                "SELECT * FROM Users WHERE Username=%s AND Password=%s",
+                (username, password), fetch=True
+            )
             if result:
-                user = result[0]
-                st.session_state.logged_in = True
-                st.session_state.username  = user["Username"]
-                st.session_state.role      = user["Role"]
+                u = result[0]
+                st.session_state.logged_in   = True
+                st.session_state.username    = u["Username"]
+                st.session_state.role        = u["Role"]
                 st.session_state._show_login = False
                 st.rerun()
             else:
@@ -212,124 +187,128 @@ def login_page():
         st.markdown("</div>", unsafe_allow_html=True)
 
         st.markdown("""
-        <div style="margin-top:20px;padding:16px 18px;background:#161b24;border:1px solid #21262d;
-        border-radius:12px;font-size:13px;color:#6b7a99">
-        <strong style="color:#e8ecf4">Demo credentials</strong><br><br>
-        🔴 <code>admin</code> / <code>arena@admin123</code> — Full access<br>
-        🟠 <code>organiser1</code> / <code>org@123</code> — Score entry (all 6 sports)<br>
-        🔵 <code>manager1</code> / <code>manage123</code> — Scheduling &amp; analytics<br>
-        🟢 <code>viewer1</code> / <code>view123</code> — Read-only (no login needed)
+        <div style="margin-top:18px;padding:16px 18px;background:#101726;border:1px solid #1e2d45;
+        border-radius:12px;font-size:13px;color:#4a5568">
+          <strong style="color:#e8ecf4">Demo credentials</strong><br><br>
+          🔴 <code>admin</code> / <code>arena@admin123</code> — Full access<br>
+          🟠 <code>organiser1</code> / <code>org@123</code> — Score entry<br>
+          🔵 <code>manager1</code> / <code>manage123</code> — Scheduling<br>
+          🟢 <code>viewer1</code> / <code>view123</code> — Read-only (no login needed)
         </div>
         """, unsafe_allow_html=True)
 
-        # SURGE sports strip
-        st.markdown("""
-        <div style="margin-top:24px;text-align:center;font-size:1.8rem;letter-spacing:6px;
-        color:#6b7a99">🏏 ⚽ 🏀 🏸 🏓 🏐</div>
-        <div style="text-align:center;font-size:11px;color:#6b7a99;margin-top:6px">
-        6 Sports · 38 Teams · SURGE 2025</div>
-        """, unsafe_allow_html=True)
+        st.markdown("""<div style="text-align:center;font-size:1.7rem;
+        letter-spacing:8px;color:#1e2d45;margin-top:22px">🏏 ⚽ 🏀</div>""",
+        unsafe_allow_html=True)
 
 
 # ── SIDEBAR ───────────────────────────────────────────────────
 def build_sidebar(role, pages):
-    rc = ROLE_COLORS.get(role, "#6b7a99")
+    color, label = ROLE_PILL.get(role, ("#22c55e", "VIEWER"))
 
-    # Header
+    # Brand
     st.sidebar.markdown("""
-    <div style="padding:16px 0 8px;text-align:center">
-      <div style="font-size:1.6rem;font-weight:800;
-        background:linear-gradient(90deg,#6c63ff,#a855f7,#f5a623);
-        -webkit-background-clip:text;-webkit-text-fill-color:transparent;
-        font-family:'Rajdhani',sans-serif;letter-spacing:-0.5px">🏆 ARENA SNU</div>
-      <div style="font-size:11px;color:#6b7a99;margin-top:2px;letter-spacing:0.1em">SURGE 2025</div>
+    <div style="padding:18px 4px 10px;text-align:center">
+      <div style="font-family:'Rajdhani',sans-serif;font-size:1.7rem;font-weight:700;
+        background:linear-gradient(100deg,#5b52f5,#a855f7,#f5a623);
+        -webkit-background-clip:text;-webkit-text-fill-color:transparent">
+        🏆 ARENA SNU
+      </div>
+      <div style="font-size:11px;color:#3a4a6a;letter-spacing:.12em;margin-top:2px">
+        SURGE 2025 · 3 Sports
+      </div>
     </div>
     """, unsafe_allow_html=True)
 
     # User badge
     if st.session_state.logged_in:
         st.sidebar.markdown(f"""
-        <div style="padding:12px 14px;background:#161b24;border:1px solid #21262d;
+        <div style="padding:12px 14px;background:#101726;border:1px solid #1e2d45;
         border-radius:10px;margin-bottom:8px">
-          <div style="font-size:15px;font-weight:700;color:#e8ecf4">👤 {st.session_state.username}</div>
+          <div style="font-weight:700;color:#e8ecf4;font-size:15px">
+            👤 {st.session_state.username}
+          </div>
           <div style="margin-top:5px">
-            <span style="background:{rc};color:#fff;font-size:11px;font-weight:700;
-            padding:2px 10px;border-radius:20px;text-transform:uppercase;letter-spacing:0.06em">
-            {role}</span>
+            <span style="background:{color};color:#fff;font-size:11px;font-weight:700;
+            padding:2px 10px;border-radius:20px;letter-spacing:.06em">{label}</span>
           </div>
         </div>
         """, unsafe_allow_html=True)
     else:
         st.sidebar.markdown("""
-        <div style="padding:12px 14px;background:#161b24;border:1px solid #21262d;
+        <div style="padding:12px 14px;background:#101726;border:1px solid #1e2d45;
         border-radius:10px;margin-bottom:8px">
-          <div style="font-size:13px;color:#6b7a99">👁️ Browsing as <strong style="color:#e8ecf4">Guest</strong></div>
-          <div style="font-size:11px;color:#6b7a99;margin-top:3px">Public pages visible without login</div>
+          <div style="color:#3a4a6a;font-size:13px">
+            👁️ Guest · <em style="color:#4a5568">public pages only</em>
+          </div>
         </div>
         """, unsafe_allow_html=True)
 
     st.sidebar.divider()
+    st.sidebar.markdown(
+        "<div style='font-size:10px;color:#3a4a6a;font-weight:600;"
+        "letter-spacing:.1em;margin-bottom:6px'>NAVIGATION</div>",
+        unsafe_allow_html=True,
+    )
 
-    # Navigation — flat radio (simpler, more reliable)
-    st.sidebar.markdown("<div style='font-size:11px;color:#6b7a99;font-weight:600;letter-spacing:.08em;margin-bottom:6px'>NAVIGATION</div>", unsafe_allow_html=True)
-    selected = st.sidebar.radio("nav", list(pages.keys()),
-                                label_visibility="collapsed")
+    selected = st.sidebar.radio("nav", list(pages.keys()), label_visibility="collapsed")
 
-    # Page help
-    help_text = PAGE_HELP.get(selected, "")
-    if help_text:
+    help_txt = PAGE_HELP.get(selected, "")
+    if help_txt:
         st.sidebar.markdown(f"""
-        <div style="padding:8px 12px;background:#161b24;border-left:3px solid #6c63ff;
-        border-radius:0 8px 8px 0;font-size:12px;color:#6b7a99;margin:4px 0 8px 0">
-        {help_text}</div>""", unsafe_allow_html=True)
+        <div style="padding:8px 12px;background:#101726;border-left:3px solid #5b52f5;
+        border-radius:0 8px 8px 0;font-size:12px;color:#4a5568;margin:4px 0 8px">
+        {help_txt}</div>""", unsafe_allow_html=True)
 
     owner = OWNERS.get(selected)
     if owner:
-        st.sidebar.markdown(f"<div style='font-size:11px;color:#6b7a99;padding:0 4px;margin-bottom:6px'>📌 Module by <b style='color:#e8ecf4'>{owner}</b></div>",
-                            unsafe_allow_html=True)
+        st.sidebar.markdown(
+            f"<div style='font-size:11px;color:#3a4a6a;margin-bottom:6px'>"
+            f"📌 Module by <b style='color:#e8ecf4'>{owner}</b></div>",
+            unsafe_allow_html=True,
+        )
 
     st.sidebar.divider()
 
-    # Scheduled matches counter
+    # Counters
     if role in ("admin", "organiser", "manager"):
-        matches_cnt = run_query("SELECT COUNT(*) AS c FROM Matches WHERE Status='Scheduled'")
-        n = matches_cnt[0]["c"] if matches_cnt else 0
-        if n > 0:
+        row = run_query("SELECT COUNT(*) AS c FROM Matches WHERE Status='Scheduled'")
+        n = row[0]["c"] if row else 0
+        if n:
             st.sidebar.markdown(f"""
-            <div style="padding:8px 12px;background:#161b24;border-radius:8px;
-            font-size:12px;margin-bottom:8px;border:1px solid #21262d">
-              📅 <strong style="color:#facc15">{n}</strong> match{'es' if n!=1 else ''} still scheduled
+            <div style="padding:8px 12px;background:#101726;border:1px solid #1e2d45;
+            border-radius:8px;font-size:12px;margin-bottom:8px">
+            📅 <strong style="color:#facc15">{n}</strong> match{'es' if n!=1 else ''} scheduled
             </div>""", unsafe_allow_html=True)
 
-    # Finals upcoming
-    finals_cnt = run_query("SELECT COUNT(*) AS c FROM Matches WHERE Stage='Final' AND Status='Scheduled'")
-    fn = finals_cnt[0]["c"] if finals_cnt else 0
-    if fn > 0:
+    row2 = run_query(
+        "SELECT COUNT(*) AS c FROM Matches WHERE Stage='Final' AND Status='Scheduled'"
+    )
+    fn = row2[0]["c"] if row2 else 0
+    if fn:
         st.sidebar.markdown(f"""
-        <div style="padding:8px 12px;background:rgba(245,166,35,.1);border-radius:8px;
-        font-size:12px;margin-bottom:8px;border:1px solid rgba(245,166,35,.3)">
-          🏆 <strong style="color:#f5a623">{fn}</strong> Final{'s' if fn!=1 else ''} remaining!
+        <div style="padding:8px 12px;background:rgba(245,166,35,.08);
+        border:1px solid rgba(245,166,35,.25);border-radius:8px;
+        font-size:12px;margin-bottom:8px">
+        🏆 <strong style="color:#f5a623">{fn}</strong> Final{'s' if fn!=1 else ''} upcoming!
         </div>""", unsafe_allow_html=True)
 
     # Auth button
     if st.session_state.logged_in:
         if st.sidebar.button("🚪 Logout", use_container_width=True):
-            st.session_state.logged_in = False
-            st.session_state.username  = "Guest"
-            st.session_state.role      = "viewer"
-            st.session_state._show_login = False
+            for k, v in [("logged_in", False), ("username", "Guest"),
+                         ("role", "viewer"), ("_show_login", False)]:
+                st.session_state[k] = v
             st.rerun()
     else:
         if st.sidebar.button("🔑 Login", use_container_width=True, type="primary"):
             st.session_state._show_login = True
             st.rerun()
 
-    # Footer
     st.sidebar.markdown("""
-    <div style="padding:12px 4px 4px;font-size:11px;color:#6b7a99;text-align:center;
-    border-top:1px solid #21262d;margin-top:8px">
-    ARENA SNU v6 · SURGE 2025<br>Shiv Nadar University<br>
-    <span style="font-size:10px">🏏 ⚽ 🏀 🏸 🏓 🏐</span>
+    <div style="padding:12px 4px 4px;font-size:11px;color:#2a3a52;
+    text-align:center;border-top:1px solid #1a2235;margin-top:8px">
+    ARENA SNU v7 · SURGE 2025<br>Shiv Nadar University
     </div>""", unsafe_allow_html=True)
 
     return selected
@@ -337,135 +316,135 @@ def build_sidebar(role, pages):
 
 # ── ADMIN PANEL ───────────────────────────────────────────────
 def admin_panel():
+    import pandas as pd, time
+
     st.markdown("""
-    <h2 style="background:linear-gradient(90deg,#a855f7,#6c63ff);
+    <h2 style="background:linear-gradient(90deg,#a855f7,#5b52f5);
     -webkit-background-clip:text;-webkit-text-fill-color:transparent;
-    font-size:2rem;font-weight:800;margin:0">🔐 Admin Panel</h2>
-    <p style="color:#6b7a99;font-size:.875rem;margin-top:4px">
-    User management, audit trail, database monitoring</p>
+    font-family:'Rajdhani',sans-serif;font-size:2rem;font-weight:700;margin:0">
+    🔐 Admin Panel</h2>
+    <p style="color:#4a5568;font-size:.875rem;margin-top:4px">
+    User management · Audit trail · Database statistics</p>
     """, unsafe_allow_html=True)
     st.divider()
 
-    st.markdown("""
-    <div style="padding:10px 16px;border-radius:8px;border-left:3px solid #a855f7;
-    background:rgba(168,85,247,.07);font-size:13px;margin-bottom:20px">
-    Visible to <strong>admin</strong> users only. Manage users, view full audit trail of all DB changes.
-    </div>""", unsafe_allow_html=True)
-
-    tab_users, tab_add, tab_audit, tab_stats = st.tabs(["👥 Users", "➕ Add User", "📋 Audit Log", "📊 DB Stats"])
+    tab_users, tab_add, tab_audit, tab_stats = st.tabs(
+        ["👥 Users", "➕ Add User", "📋 Audit Log", "📊 DB Stats"]
+    )
 
     with tab_users:
-        users = run_query("SELECT Username, Role, Created_At FROM Users ORDER BY Role, Username", fetch=True)
-        if users:
-            import pandas as pd
-            df = pd.DataFrame(users)
-            role_colors = {"admin": "🔴", "organiser": "🟠", "manager": "🔵", "viewer": "🟢"}
-            df["Role"] = df["Role"].map(lambda r: f"{role_colors.get(r,'')} {r}")
+        rows = run_query(
+            "SELECT Username, Role, Created_At FROM Users ORDER BY Role, Username",
+            fetch=True,
+        )
+        if rows:
+            df = pd.DataFrame(rows)
+            icons = {"admin":"🔴","organiser":"🟠","manager":"🔵","viewer":"🟢"}
+            df["Role"] = df["Role"].map(lambda r: f"{icons.get(r,'')} {r}")
             st.dataframe(df, use_container_width=True, hide_index=True)
-        st.caption("Passwords are hidden for security.")
+        st.caption("Passwords hidden for security.")
 
     with tab_add:
         st.subheader("Create New User")
-        st.info("Create **manager** and **organiser** accounts. Admins are created directly in the DB.")
-
         with st.form("add_user_form", clear_on_submit=True):
-            col1, col2 = st.columns(2)
-            with col1:
-                new_username = st.text_input("👤 Username", placeholder="e.g. ayush_organiser")
-                new_role     = st.selectbox("🎭 Role", ["organiser", "manager"],
-                                            help="Organiser = score entry for all 6 sports | Manager = scheduling")
-            with col2:
-                new_password  = st.text_input("🔑 Password", type="password")
-                new_password2 = st.text_input("🔑 Confirm Password", type="password")
-
+            c1, c2 = st.columns(2)
+            with c1:
+                new_user = st.text_input("👤 Username")
+                new_role = st.selectbox("🎭 Role", ["organiser","manager"])
+            with c2:
+                pw1 = st.text_input("🔑 Password",         type="password")
+                pw2 = st.text_input("🔑 Confirm Password", type="password")
             if st.form_submit_button("✅ Create User", use_container_width=True):
-                if not new_username or not new_password:
-                    st.error("❌ Username and password are required.")
-                elif new_password != new_password2:
+                if not new_user or not pw1:
+                    st.error("❌ Username and password required.")
+                elif pw1 != pw2:
                     st.error("❌ Passwords do not match.")
-                elif len(new_password) < 6:
-                    st.error("❌ Password must be at least 6 characters.")
+                elif len(pw1) < 6:
+                    st.error("❌ Password must be ≥ 6 characters.")
                 else:
-                    existing = run_query("SELECT COUNT(*) AS c FROM Users WHERE Username=%s",
-                                         (new_username,), fetch=True)
-                    if existing and existing[0]["c"] > 0:
-                        st.error(f"❌ Username '{new_username}' already exists.")
+                    ex = run_query(
+                        "SELECT COUNT(*) AS c FROM Users WHERE Username=%s",
+                        (new_user,), fetch=True,
+                    )
+                    if ex and ex[0]["c"] > 0:
+                        st.error(f"❌ Username '{new_user}' already exists.")
                     else:
-                        run_query("INSERT INTO Users (Username, Password, Role) VALUES (%s, %s, %s)",
-                                  (new_username, new_password, new_role), fetch=False)
-                        st.success(f"✅ User **{new_username}** created as **{new_role}**.")
+                        run_query(
+                            "INSERT INTO Users (Username,Password,Role) VALUES (%s,%s,%s)",
+                            (new_user, pw1, new_role), fetch=False,
+                        )
+                        st.success(f"✅ **{new_user}** created as **{new_role}**.")
                         st.rerun()
 
         st.divider()
         st.subheader("Delete User")
-        st.warning("⚠️ This permanently removes the user's login access.")
-        del_users = run_query(
-            "SELECT Username, Role FROM Users WHERE Role NOT IN ('admin') ORDER BY Role, Username", fetch=True)
-        if del_users:
-            del_map = {f"{u['Username']} ({u['Role']})": u['Username'] for u in del_users}
-            del_choice = st.selectbox("Select user to delete", list(del_map.keys()))
+        del_rows = run_query(
+            "SELECT Username, Role FROM Users WHERE Role NOT IN ('admin') ORDER BY Role, Username",
+            fetch=True,
+        )
+        if del_rows:
+            del_map = {f"{u['Username']} ({u['Role']})": u["Username"] for u in del_rows}
+            choice  = st.selectbox("Select user to delete", list(del_map.keys()))
             if st.button("🗑️ Delete User", type="secondary"):
-                run_query("DELETE FROM Users WHERE Username=%s", (del_map[del_choice],), fetch=False)
-                st.success(f"✅ User **{del_map[del_choice]}** deleted.")
+                run_query("DELETE FROM Users WHERE Username=%s", (del_map[choice],), fetch=False)
+                st.success(f"✅ **{del_map[choice]}** deleted.")
                 st.rerun()
 
     with tab_audit:
-        st.caption("Every INSERT/UPDATE to Teams and Matches is auto-recorded by DB triggers. Zero Python code for logging.")
+        st.caption("Every INSERT/UPDATE to Teams and Matches is auto-recorded by DB triggers.")
         audit = run_query("SELECT * FROM Audit_Log ORDER BY Changed_At DESC LIMIT 100", fetch=True)
         if audit:
-            import pandas as pd
             st.dataframe(pd.DataFrame(audit), use_container_width=True, hide_index=True)
         else:
-            st.info("No audit entries yet. Add teams or schedule matches to see entries.")
+            st.info("No audit entries yet.")
 
     with tab_stats:
-        st.subheader("📊 Database Statistics")
-        import pandas as pd
-
-        col1, col2, col3, col4, col5, col6 = st.columns(6)
-        stats = [
-            ("Teams",   "SELECT COUNT(*) AS n FROM Teams"),
-            ("Players", "SELECT COUNT(*) AS n FROM Players"),
-            ("Matches", "SELECT COUNT(*) AS n FROM Matches"),
-            ("Scored",  "SELECT COUNT(*) AS n FROM (SELECT Match_ID FROM Scorecard_Cricket UNION SELECT Match_ID FROM Scorecard_Football UNION SELECT Match_ID FROM Scorecard_Basketball) AS scored"),
-            ("Sports",  "SELECT COUNT(*) AS n FROM Sports"),
-            ("Venues",  "SELECT COUNT(*) AS n FROM Venues"),
+        st.subheader("Database Statistics")
+        qs = [
+            ("Teams",      "SELECT COUNT(*) AS n FROM Teams"),
+            ("Players",    "SELECT COUNT(*) AS n FROM Players"),
+            ("Matches",    "SELECT COUNT(*) AS n FROM Matches"),
+            ("Completed",  "SELECT COUNT(*) AS n FROM Matches WHERE Status='Completed'"),
+            ("Cricket Rows","SELECT COUNT(*) AS n FROM Scorecard_Cricket"),
+            ("Football Rows","SELECT COUNT(*) AS n FROM Scorecard_Football"),
         ]
-        for col, (label, q) in zip([col1,col2,col3,col4,col5,col6], stats):
+        cols = st.columns(len(qs))
+        for col, (label, q) in zip(cols, qs):
             res = run_query(q)
             col.metric(label, res[0]["n"] if res else 0)
 
         st.divider()
-        teams_by_sport = run_query("""
-            SELECT sp.Sport_Name, COUNT(t.Team_ID) AS Teams,
-                   COUNT(p.Player_ID) AS Players
+        sport_stats = run_query("""
+            SELECT sp.Sport_Name, COUNT(DISTINCT t.Team_ID) AS Teams,
+                   COUNT(DISTINCT p.Player_ID) AS Players,
+                   COUNT(DISTINCT m.Match_ID)  AS Matches
             FROM Sports sp
-            LEFT JOIN Teams t ON sp.Sport_ID=t.Sport_ID
-            LEFT JOIN Players p ON p.Team_ID=t.Team_ID
+            LEFT JOIN Teams   t ON sp.Sport_ID = t.Sport_ID
+            LEFT JOIN Players p ON p.Team_ID   = t.Team_ID
+            LEFT JOIN Matches  m ON sp.Sport_ID = m.Sport_ID
             GROUP BY sp.Sport_ID
         """)
-        if teams_by_sport:
-            st.dataframe(pd.DataFrame(teams_by_sport), use_container_width=True, hide_index=True)
+        if sport_stats:
+            st.dataframe(pd.DataFrame(sport_stats), use_container_width=True, hide_index=True)
 
 
-# ── MAIN ROUTING ──────────────────────────────────────────────
-if st.session_state.get("_show_login") and not st.session_state.logged_in:
+# ── ROUTING ───────────────────────────────────────────────────
+if st.session_state._show_login and not st.session_state.logged_in:
     login_page()
     st.stop()
 
 role  = st.session_state.role
 pages = {k: ALL_PAGES[k] for k in ROLE_ACCESS.get(role, PUBLIC_PAGES) if k in ALL_PAGES}
-
 if not st.session_state.logged_in:
     pages = {k: ALL_PAGES[k] for k in PUBLIC_PAGES}
 
 selected = build_sidebar(role, pages)
 
-if st.session_state.get("_show_login") and not st.session_state.logged_in:
+if st.session_state._show_login and not st.session_state.logged_in:
     login_page()
     st.stop()
 
-# ── RENDER SELECTED PAGE ──────────────────────────────────────
+# ── RENDER PAGE ───────────────────────────────────────────────
 if selected == "🔐 Admin Panel" and role == "admin":
     admin_panel()
 
@@ -476,23 +455,17 @@ elif pages.get(selected):
         mod  = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(mod)
     else:
-        st.error(f"❌ File '{fname}' not found. Make sure all .py files are in the same folder as main_app.py")
-        st.markdown("""
-        **Expected file structure:**
-        ```
-        ARENA_SNU/
-        ├── main_app.py
-        ├── home_page.py
-        ├── prediction.py
-        ├── page_cricket.py
-        ├── page_football.py
-        ├── page_basketball.py
-        ├── page_badminton.py       ← NEW in v6
-        ├── page_tabletennis.py     ← NEW in v6
-        ├── page_volleyball.py      ← NEW in v6
-        ├── page_schedule.py
-        ├── page_comparison.py
-        ├── db_connection.py
-        └── .env
-        ```
+        st.error(f"❌ File '{fname}' not found. Ensure all .py files are in the same folder.")
+        st.code("""
+ARENA_SNU/
+├── main_app.py          ← run this
+├── home_page.py
+├── page_cricket.py
+├── page_football.py
+├── page_basketball.py
+├── page_schedule.py
+├── page_comparison.py
+├── prediction.py
+├── db_connection.py
+└── .env                 ← DB_PASSWORD=yourpassword
         """)
