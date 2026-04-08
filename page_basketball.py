@@ -35,7 +35,7 @@ if CAN_ENTER:
     with tab_entry:
         matches = run_query("""
             SELECT m.Match_ID,
-                   CONCAT(ta.Team_Name,' vs ',tb.Team_Name,'  (',m.Match_Date,')  [',m.Stage,']') AS Desc,
+                   CONCAT(ta.Team_Name,' vs ',tb.Team_Name,'  (',m.Match_Date,')  [',m.Stage,']') AS Match_Desc,
                    m.Team_A_ID, m.Team_B_ID
             FROM Matches m JOIN Teams ta ON m.Team_A_ID=ta.Team_ID JOIN Teams tb ON m.Team_B_ID=tb.Team_ID
             WHERE m.Sport_ID=3 ORDER BY m.Match_Date DESC
@@ -43,7 +43,7 @@ if CAN_ENTER:
         if not matches:
             st.warning("⚠️ No basketball matches found.")
         else:
-            md = {r["Desc"]: r for r in matches}
+            md = {r["Match_Desc"]: r for r in matches}
             sel = md[st.selectbox("Select Match", list(md.keys()))]
             mid = sel["Match_ID"]
             players = run_query("""
