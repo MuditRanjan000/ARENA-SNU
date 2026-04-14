@@ -14,9 +14,9 @@ div.stButton>button:hover{transform:translateY(-2px);box-shadow:0 8px 28px rgba(
 footer{visibility:hidden}</style>""", unsafe_allow_html=True)
 
 st.markdown("""
-<h2 style="background:linear-gradient(90deg,#f97316,#5b52f5);-webkit-background-clip:text;
--webkit-text-fill-color:transparent;font-family:'Rajdhani',sans-serif;
-font-size:2rem;font-weight:700;margin:0">🏀 Basketball Module</h2>
+<h2 style="font-family:'Rajdhani',sans-serif;font-size:2rem;font-weight:700;margin:0">
+🏀 <span style="background:linear-gradient(90deg,#f97316,#5b52f5);-webkit-background-clip:text;-webkit-text-fill-color:transparent;">Basketball Module</span>
+</h2>
 <p style="color:#4a5568;font-size:.875rem;margin-top:4px">
 Score Entry · MVP Leaderboard · Team Stats</p>
 """, unsafe_allow_html=True)

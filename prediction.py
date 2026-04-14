@@ -1,10 +1,8 @@
-# prediction.py — ARENA SNU ML Prediction Module
-# System Architect: Mudit
 import streamlit as st
 import numpy as np
 import pandas as pd
 import plotly.graph_objects as go
-from db_connection import run_query, run_cached_query
+from db_connection import run_query
 
 try:
     st.set_page_config(page_title="Predictions — ARENA SNU", page_icon="📈", layout="wide")
@@ -25,7 +23,6 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 def hex_rgba(hex_color, alpha=0.15):
-    """Convert #rrggbb to rgba() — Plotly fillcolor does NOT accept 8-char hex."""
     h = hex_color.lstrip("#")
     r, g, b = int(h[0:2], 16), int(h[2:4], 16), int(h[4:6], 16)
     return f"rgba({r},{g},{b},{alpha})"
@@ -54,7 +51,7 @@ with col_sport:
 cfg        = SPORT_CONFIG[sport_choice]
 sport_name = sport_choice.split(" ", 1)[1]
 
-players_raw = run_cached_query(f"""
+players_raw = run_query(f"""
     SELECT p.Player_ID, p.Player_Name, t.Team_Name, COUNT(*) AS entries
     FROM {cfg['table']} sc
     JOIN Players p ON sc.Player_ID = p.Player_ID
@@ -74,14 +71,10 @@ with col_player:
 player = player_map[selected_label]
 pid    = player["Player_ID"]
 
-@st.cache_data(ttl=60)
-def get_player_history(player_id, table, metric):
-    return run_query(f"""
-        SELECT {metric} AS score FROM {table}
-        WHERE Player_ID = {player_id} ORDER BY Stat_ID DESC LIMIT 10
-    """)
-
-scores_raw = get_player_history(pid, cfg['table'], cfg['metric'])
+scores_raw = run_query(f"""
+    SELECT {cfg['metric']} AS score FROM {cfg['table']}
+    WHERE Player_ID = {pid} ORDER BY Stat_ID DESC LIMIT 10
+""")
 scores = [float(r["score"]) for r in reversed(scores_raw)]
 n      = len(scores)
 
@@ -94,7 +87,6 @@ if n < 2:
 x = np.arange(1, n + 1, dtype=float)
 y = np.array(scores, dtype=float)
 
-# Pure numpy linear regression
 x_mean    = x.mean();  y_mean = y.mean()
 denom     = np.sum((x - x_mean) ** 2)
 slope     = np.sum((x - x_mean) * (y - y_mean)) / denom if denom else 0.0
@@ -109,16 +101,14 @@ margin    = 2.0 * se * np.sqrt(1 + 1/n + (next_x - x_mean)**2 / max(denom, 1e-9)
 conf_low  = max(0.0, round(prediction - margin, 2))
 conf_high = round(prediction + margin, 2)
 
-# Metrics
 st.divider()
 m1, m2, m3, m4 = st.columns(4)
 m1.metric(f"Predicted Next {cfg['label']}", prediction)
 m2.metric("95% Range", f"{conf_low} – {conf_high}")
 trend = "↑ Improving" if slope > 0.05 else ("↓ Declining" if slope < -0.05 else "→ Stable")
-m3.metric("Form Form Trend", trend, f"{abs(round(slope,2))}/match")
+m3.metric("Form Trend", trend, f"{abs(round(slope,2))}/match")
 m4.metric(f"Avg of Last {n}", round(y.mean(), 2))
 
-# Chart
 c   = cfg["color"]
 fig = go.Figure()
 

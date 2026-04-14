@@ -1,6 +1,3 @@
-# db_connection.py — ARENA SNU Shared Database Connection
-# Uses .env for secure password handling
-
 import mysql.connector
 from mysql.connector import Error, pooling
 import streamlit as st
@@ -16,12 +13,7 @@ DB_CONFIG = {
     "database": "ARENA_SNU"
 }
 
-def _show_conn_error(e):
-    """Show DB connection error only once per session to avoid spam."""
-    if not st.session_state.get("_db_err_shown"):
-        st.error(f"❌ Database connection failed: {e}")
-        st.session_state["_db_err_shown"] = True
-
+# Cache the connection pool resource globally, not the data
 @st.cache_resource
 def get_connection_pool():
     return pooling.MySQLConnectionPool(
@@ -34,24 +26,17 @@ def get_connection_pool():
 def get_connection():
     try:
         pool = get_connection_pool()
-        conn = pool.get_connection()
-        if conn.is_connected():
-            # Reset error flag on successful connection
-            st.session_state["_db_err_shown"] = False
-            return conn
+        return pool.get_connection()
     except Error as e:
-        _show_conn_error(e)
+        st.error(f"❌ Database connection failed: {e}")
         return None
 
 def run_query(query: str, params: tuple = (), fetch: bool = True):
-    """
-    fetch=True  → SELECT → returns list of dicts
-    fetch=False → INSERT/UPDATE/DELETE → commits immediately
-    """
     conn = get_connection()
     if not conn:
         return [] if fetch else 0
 
+    cursor = None
     try:
         cursor = conn.cursor(dictionary=True)
         cursor.execute(query, params)
@@ -67,19 +52,19 @@ def run_query(query: str, params: tuple = (), fetch: bool = True):
         return [] if fetch else 0
 
     finally:
+        # Closing cursor prevents "Unread result found" MySQL errors
+        if cursor:
+            cursor.close()
+        # Closing the connection returns it to the pool
         if conn:
             conn.close()
 
-@st.cache_data(ttl=300)
-def run_cached_query(query: str, params: tuple = ()):
-    return run_query(query, params, fetch=True)
-
 def call_procedure(proc_name: str, args: tuple = ()):
-    """Call stored procedure"""
     conn = get_connection()
     if not conn:
         return None, "Connection failed"
 
+    cursor = None
     try:
         cursor = conn.cursor(dictionary=True)
         cursor.callproc(proc_name, args)
@@ -95,5 +80,7 @@ def call_procedure(proc_name: str, args: tuple = ()):
         return None, str(e)
 
     finally:
+        if cursor:
+            cursor.close()
         if conn:
             conn.close()
