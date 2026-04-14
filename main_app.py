@@ -394,7 +394,19 @@ def admin_panel():
         st.caption("Every INSERT/UPDATE to Teams and Matches is auto-recorded by DB triggers.")
         audit = run_query("SELECT * FROM Audit_Log ORDER BY Changed_At DESC LIMIT 100", fetch=True)
         if audit:
-            st.dataframe(pd.DataFrame(audit), use_container_width=True, hide_index=True)
+            df_audit = pd.DataFrame(audit)
+            st.dataframe(df_audit, use_container_width=True, hide_index=True)
+            
+            # --- New CSV Export Feature ---
+            st.divider()
+            csv = df_audit.to_csv(index=False).encode('utf-8')
+            st.download_button(
+                label="📥 Download Audit Log as CSV",
+                data=csv,
+                file_name='arena_audit_log.csv',
+                mime='text/csv',
+                type="primary"
+            )
         else:
             st.info("No audit entries yet.")
 

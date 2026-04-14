@@ -658,6 +658,29 @@ JOIN   Teams   t ON p.Team_ID   = t.Team_ID
 WHERE  p.Role = 'SUSPENDED'
 GROUP BY sf.Player_ID;
 
+
+-- ═══════════════════════════════════════════════════════════
+--  EVENT SCHEDULER (Automated Background Tasks)
+-- ═══════════════════════════════════════════════════════════
+
+-- Enable the global event scheduler
+SET GLOBAL event_scheduler = ON;
+
+DROP EVENT IF EXISTS AutoUpdateMatchStatus;
+DELIMITER $$
+CREATE EVENT AutoUpdateMatchStatus
+ON SCHEDULE EVERY 1 HOUR
+DO
+BEGIN
+    -- Automatically mark past scheduled matches as 'Ongoing'
+    UPDATE Matches 
+    SET Status = 'Ongoing'
+    WHERE Status = 'Scheduled' 
+      AND Match_Date <= CURDATE() 
+      AND Match_Time <= CURTIME();
+END$$
+DELIMITER ;
+
 -- Bonus: Call the cursor-based procedure
 -- CALL GenerateSportReport('Cricket');
 -- CALL GenerateSportReport('Football');
