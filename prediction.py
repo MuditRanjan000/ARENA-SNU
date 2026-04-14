@@ -4,7 +4,7 @@ import streamlit as st
 import numpy as np
 import pandas as pd
 import plotly.graph_objects as go
-from db_connection import run_query
+from db_connection import run_query, run_cached_query
 
 try:
     st.set_page_config(page_title="Predictions — ARENA SNU", page_icon="📈", layout="wide")
@@ -54,7 +54,7 @@ with col_sport:
 cfg        = SPORT_CONFIG[sport_choice]
 sport_name = sport_choice.split(" ", 1)[1]
 
-players_raw = run_query(f"""
+players_raw = run_cached_query(f"""
     SELECT p.Player_ID, p.Player_Name, t.Team_Name, COUNT(*) AS entries
     FROM {cfg['table']} sc
     JOIN Players p ON sc.Player_ID = p.Player_ID
@@ -74,10 +74,14 @@ with col_player:
 player = player_map[selected_label]
 pid    = player["Player_ID"]
 
-scores_raw = run_query(f"""
-    SELECT {cfg['metric']} AS score FROM {cfg['table']}
-    WHERE Player_ID = {pid} ORDER BY Stat_ID DESC LIMIT 10
-""")
+@st.cache_data(ttl=60)
+def get_player_history(player_id, table, metric):
+    return run_query(f"""
+        SELECT {metric} AS score FROM {table}
+        WHERE Player_ID = {player_id} ORDER BY Stat_ID DESC LIMIT 10
+    """)
+
+scores_raw = get_player_history(pid, cfg['table'], cfg['metric'])
 scores = [float(r["score"]) for r in reversed(scores_raw)]
 n      = len(scores)
 
@@ -111,7 +115,7 @@ m1, m2, m3, m4 = st.columns(4)
 m1.metric(f"Predicted Next {cfg['label']}", prediction)
 m2.metric("95% Range", f"{conf_low} – {conf_high}")
 trend = "↑ Improving" if slope > 0.05 else ("↓ Declining" if slope < -0.05 else "→ Stable")
-m3.metric("Form Trend", trend, f"{abs(round(slope,2))}/match")
+m3.metric("Form Form Trend", trend, f"{abs(round(slope,2))}/match")
 m4.metric(f"Avg of Last {n}", round(y.mean(), 2))
 
 # Chart

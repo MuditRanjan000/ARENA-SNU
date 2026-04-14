@@ -2,7 +2,7 @@
 # Uses .env for secure password handling
 
 import mysql.connector
-from mysql.connector import Error
+from mysql.connector import Error, pooling
 import streamlit as st
 from dotenv import load_dotenv
 import os
@@ -16,17 +16,25 @@ DB_CONFIG = {
     "database": "ARENA_SNU"
 }
 
-
 def _show_conn_error(e):
     """Show DB connection error only once per session to avoid spam."""
     if not st.session_state.get("_db_err_shown"):
         st.error(f"❌ Database connection failed: {e}")
         st.session_state["_db_err_shown"] = True
 
+@st.cache_resource
+def get_connection_pool():
+    return pooling.MySQLConnectionPool(
+        pool_name="arena_pool",
+        pool_size=10,
+        pool_reset_session=True,
+        **DB_CONFIG
+    )
 
 def get_connection():
     try:
-        conn = mysql.connector.connect(**DB_CONFIG)
+        pool = get_connection_pool()
+        conn = pool.get_connection()
         if conn.is_connected():
             # Reset error flag on successful connection
             st.session_state["_db_err_shown"] = False
@@ -34,7 +42,6 @@ def get_connection():
     except Error as e:
         _show_conn_error(e)
         return None
-
 
 def run_query(query: str, params: tuple = (), fetch: bool = True):
     """
@@ -60,8 +67,12 @@ def run_query(query: str, params: tuple = (), fetch: bool = True):
         return [] if fetch else 0
 
     finally:
-        conn.close()
+        if conn:
+            conn.close()
 
+@st.cache_data(ttl=300)
+def run_cached_query(query: str, params: tuple = ()):
+    return run_query(query, params, fetch=True)
 
 def call_procedure(proc_name: str, args: tuple = ()):
     """Call stored procedure"""
@@ -84,4 +95,5 @@ def call_procedure(proc_name: str, args: tuple = ()):
         return None, str(e)
 
     finally:
-        conn.close()
+        if conn:
+            conn.close()
