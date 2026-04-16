@@ -29,81 +29,82 @@ st.markdown("""
 """, unsafe_allow_html=True)
 st.divider()
 
-st.markdown("""
-<div style="padding:10px 16px;border-radius:8px;border-left:3px solid #6c63ff;
-background:rgba(108,99,255,.07);font-size:13px;margin-bottom:20px">
-    The <strong>ScheduleMatch</strong> procedure checks: (1) venue not double-booked at same date+time,
-    (2) teams are different. If either check fails, MySQL raises a <code>SIGNAL SQLSTATE</code> error —
-    the database rejects it, not Python.
-</div>
-""", unsafe_allow_html=True)
+# RBAC Verification
+role = st.session_state.get("role", "viewer")
+CAN_SCHEDULE = role in ("admin", "organiser")
 
-# Fetch all sports to populate the initial filter dropdown
-sports = run_query("SELECT Sport_ID, Sport_Name FROM Sports")
-if not sports:
-    st.error("❌ No sports found in database")
-    st.stop()
+if CAN_SCHEDULE:
+    st.markdown("""
+    <div style="padding:10px 16px;border-radius:8px;border-left:3px solid #6c63ff;
+    background:rgba(108,99,255,.07);font-size:13px;margin-bottom:20px">
+        The <strong>ScheduleMatch</strong> procedure checks: (1) venue not double-booked at same date+time,
+        (2) teams are different. If either check fails, MySQL raises a <code>SIGNAL SQLSTATE</code> error.
+    </div>
+    """, unsafe_allow_html=True)
 
-sport_dict = {s["Sport_Name"]: s["Sport_ID"] for s in sports}
-selected_sport = st.selectbox("Select Sport", list(sport_dict.keys()))
+    sports = run_query("SELECT Sport_ID, Sport_Name FROM Sports")
+    if not sports:
+        st.error("❌ No sports found in database")
+        st.stop()
 
-# Filter the teams dropdown dynamically based on the selected sport
-teams = run_query("SELECT Team_ID, Team_Name FROM Teams WHERE Sport_ID = %s", (sport_dict[selected_sport],))
-if not teams:
-    st.warning("⚠️ No teams found for this sport")
-    st.stop()
+    sport_dict = {s["Sport_Name"]: s["Sport_ID"] for s in sports}
+    selected_sport = st.selectbox("Select Sport", list(sport_dict.keys()))
 
-team_dict = {t["Team_Name"]: t["Team_ID"] for t in teams}
+    teams = run_query("SELECT Team_ID, Team_Name FROM Teams WHERE Sport_ID = %s", (sport_dict[selected_sport],))
+    if not teams:
+        st.warning("⚠️ No teams found for this sport")
+        st.stop()
 
-venues = run_query("SELECT Venue_ID, Venue_Name FROM Venues")
-if not venues:
-    st.error("❌ No venues found in database")
-    st.stop()
+    team_dict = {t["Team_Name"]: t["Team_ID"] for t in teams}
 
-venue_dict = {v["Venue_Name"]: v["Venue_ID"] for v in venues}
+    venues = run_query("SELECT Venue_ID, Venue_Name FROM Venues")
+    if not venues:
+        st.error("❌ No venues found in database")
+        st.stop()
 
-with st.form("schedule_form"):
-    col1, col2 = st.columns(2)
-    with col1:
-        team1 = st.selectbox("Team 1", list(team_dict.keys()))
-        match_date = st.date_input("Match Date")
-        selected_stage = st.selectbox("Stage", ["Group Stage", "Quarter-Final", "Semi-Final", "Final"])
-    with col2:
-        # Default index to 1 if available so Team 1 and Team 2 differ initially
-        team2 = st.selectbox("Team 2", list(team_dict.keys()), index=1 if len(team_dict) > 1 else 0)
-        match_time = st.time_input("Match Time")
-        selected_venue = st.selectbox("Venue", list(venue_dict.keys()))
+    venue_dict = {v["Venue_Name"]: v["Venue_ID"] for v in venues}
 
-    submit = st.form_submit_button("✅ Schedule Match", use_container_width=True)
+    with st.form("schedule_form"):
+        col1, col2 = st.columns(2)
+        with col1:
+            team1 = st.selectbox("Team 1", list(team_dict.keys()))
+            match_date = st.date_input("Match Date")
+            selected_stage = st.selectbox("Stage", ["Group Stage", "Quarter-Final", "Semi-Final", "Final"])
+        with col2:
+            team2 = st.selectbox("Team 2", list(team_dict.keys()), index=1 if len(team_dict) > 1 else 0)
+            match_time = st.time_input("Match Time")
+            selected_venue = st.selectbox("Venue", list(venue_dict.keys()))
 
-    if submit:
-        # Prevent scheduling a team to play against itself
-        if team1 == team2:
-            st.error("❌ Teams cannot be the same")
-        else:
-            args = (
-                sport_dict[selected_sport],
-                team_dict[team1],
-                team_dict[team2],
-                str(match_date),
-                str(match_time),
-                venue_dict[selected_venue],
-                selected_stage
-            )
-            # Call the stored procedure to insert the match and handle potential DB-level conflicts
-            result, error = call_procedure("ScheduleMatch", args)
-            if error:
-                if "already booked" in error:
-                    st.error("❌ Venue is already booked at that date and time. Choose a different slot.")
-                elif "same" in error.lower():
-                    st.error("❌ Team A and Team B cannot be the same team.")
-                else:
-                    st.error(f"❌ {error}")
+        submit = st.form_submit_button("✅ Schedule Match", use_container_width=True)
+
+        if submit:
+            if team1 == team2:
+                st.error("❌ Teams cannot be the same")
             else:
-                st.toast("Match scheduled!", icon="✅")
-                st.balloons()
-                time.sleep(1)
-                st.rerun()
+                args = (
+                    sport_dict[selected_sport],
+                    team_dict[team1],
+                    team_dict[team2],
+                    str(match_date),
+                    str(match_time),
+                    venue_dict[selected_venue],
+                    selected_stage
+                )
+                result, error = call_procedure("ScheduleMatch", args)
+                if error:
+                    if "already booked" in error:
+                        st.error("❌ Venue is already booked at that date and time. Choose a different slot.")
+                    elif "same" in error.lower():
+                        st.error("❌ Team A and Team B cannot be the same team.")
+                    else:
+                        st.error(f"❌ {error}")
+                else:
+                    st.toast("Match scheduled!", icon="✅")
+                    st.balloons()
+                    time.sleep(1)
+                    st.rerun()
+else:
+    st.info("🔒 Match scheduling is restricted to **Admins** and **Organisers**.")
 
 st.divider()
 st.subheader("📅 Full Match Schedule")
