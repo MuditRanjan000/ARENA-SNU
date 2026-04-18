@@ -672,12 +672,13 @@ CREATE EVENT AutoUpdateMatchStatus
 ON SCHEDULE EVERY 1 HOUR
 DO
 BEGIN
-    -- Automatically mark past scheduled matches as 'Ongoing'
-    UPDATE Matches 
-    SET Status = 'Ongoing'
-    WHERE Status = 'Scheduled' 
-      AND Match_Date <= CURDATE() 
-      AND Match_Time <= CURTIME();
+    -- Auto-cancel matches that were scheduled 2+ days ago but never had a result entered
+    -- NOTE: 'Ongoing' is not a valid Status value; valid values are Scheduled/Completed/Cancelled
+    UPDATE Matches
+    SET    Status = 'Cancelled'
+    WHERE  Status     = 'Scheduled'
+      AND  Match_Date < DATE_SUB(CURDATE(), INTERVAL 2 DAY)
+      AND  Winner_Team_ID IS NULL;
 END$$
 DELIMITER ;
 

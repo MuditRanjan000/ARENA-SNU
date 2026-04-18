@@ -113,8 +113,8 @@ ALL_PAGES = {
 
 ROLE_ACCESS = {
     "admin":     list(ALL_PAGES.keys()),
-    "organiser": ["🏠 Home Dashboard","🏏 Cricket","⚽ Football","🏀 Basketball"],
-    "manager":   ["🏠 Home Dashboard","📅 Schedule Match","⚔️ Compare Players","📈 Predictions"],
+    "organiser": ["🏠 Home Dashboard","📅 Schedule Match","🏏 Cricket","⚽ Football","🏀 Basketball"],
+    "manager":   ["🏠 Home Dashboard","⚔️ Compare Players","📈 Predictions"],
     "viewer":    PUBLIC_PAGES,
 }
 
@@ -132,7 +132,7 @@ PAGE_HELP = {
 OWNERS = {
     "📅 Schedule Match": "Disha",
     "⚽ Football":       "Ayush",
-    "🏀 Basketball":     "Amitog",
+    "🏀 Basketball":     "Amitoj",
     "🏏 Cricket":        "Ashank",
 }
 
