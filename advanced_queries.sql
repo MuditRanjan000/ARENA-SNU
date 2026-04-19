@@ -1,11 +1,37 @@
 -- ============================================================
 --  ARENA SNU v7 — Advanced SQL
 --  6 Triggers · 4 Stored Procedures (incl. CURSOR) ·
---  5 Views · GRANT/REVOKE · 15 Complex Queries
+--  6 Views (incl. new Detailed Scores) · GRANT/REVOKE · 15 Complex Queries
 --  Run AFTER arena_setup.sql
 -- ============================================================
 
 USE ARENA_SNU;
+
+-- ═══════════════════════════════════════════════════════════
+--  SCHEMA PATCH: Add Icon column to Sports (safe for re-runs)
+-- ═══════════════════════════════════════════════════════════
+-- MySQL <8.0 does not support ALTER TABLE ... ADD COLUMN IF NOT EXISTS.
+-- This procedure checks the information schema before adding the column,
+-- making it safe to execute even when the column already exists.
+
+DROP PROCEDURE IF EXISTS _AddIconColumn;
+DELIMITER $$
+CREATE PROCEDURE _AddIconColumn()
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1
+        FROM   information_schema.COLUMNS
+        WHERE  TABLE_SCHEMA = 'ARENA_SNU'
+          AND  TABLE_NAME   = 'Sports'
+          AND  COLUMN_NAME  = 'Icon'
+    ) THEN
+        ALTER TABLE Sports ADD COLUMN Icon VARCHAR(10) DEFAULT '🏅';
+    END IF;
+END$$
+DELIMITER ;
+
+CALL _AddIconColumn();
+DROP PROCEDURE IF EXISTS _AddIconColumn;
 
 -- ═══════════════════════════════════════════════════════════
 --  TRIGGERS (6 total)
@@ -365,7 +391,7 @@ END$$
 DELIMITER ;
 
 -- ═══════════════════════════════════════════════════════════
---  VIEWS (5 total)
+--  VIEWS (6 total)
 -- ═══════════════════════════════════════════════════════════
 
 -- V1: Full match schedule
@@ -451,29 +477,70 @@ LEFT JOIN Teams tw ON m.Winner_Team_ID = tw.Team_ID
 WHERE  m.Stage = 'Final'
 ORDER BY m.Match_Date;
 
+-- V6: Detailed Match Results with Scores inline
+CREATE OR REPLACE VIEW Detailed_Match_Results AS
+SELECT 
+    m.Match_ID,
+    sp.Sport_Name,
+    ta.Team_Name AS Team_A,
+    tb.Team_Name AS Team_B,
+    CASE 
+        WHEN sp.Sport_Name = 'Football' THEN 
+            CONCAT(
+                IFNULL((SELECT SUM(Goals) FROM Scorecard_Football WHERE Match_ID = m.Match_ID AND Player_ID IN (SELECT Player_ID FROM Players WHERE Team_ID = m.Team_A_ID)), 0),
+                ' - ', 
+                IFNULL((SELECT SUM(Goals) FROM Scorecard_Football WHERE Match_ID = m.Match_ID AND Player_ID IN (SELECT Player_ID FROM Players WHERE Team_ID = m.Team_B_ID)), 0)
+            )
+        WHEN sp.Sport_Name = 'Cricket' THEN 
+            CONCAT(
+                IFNULL((SELECT SUM(Runs_Scored) FROM Scorecard_Cricket WHERE Match_ID = m.Match_ID AND Player_ID IN (SELECT Player_ID FROM Players WHERE Team_ID = m.Team_A_ID)), 0),
+                ' vs ',
+                IFNULL((SELECT SUM(Runs_Scored) FROM Scorecard_Cricket WHERE Match_ID = m.Match_ID AND Player_ID IN (SELECT Player_ID FROM Players WHERE Team_ID = m.Team_B_ID)), 0)
+            )
+        WHEN sp.Sport_Name = 'Basketball' THEN 
+            CONCAT(
+                IFNULL((SELECT SUM(Points) FROM Scorecard_Basketball WHERE Match_ID = m.Match_ID AND Player_ID IN (SELECT Player_ID FROM Players WHERE Team_ID = m.Team_A_ID)), 0),
+                ' - ',
+                IFNULL((SELECT SUM(Points) FROM Scorecard_Basketball WHERE Match_ID = m.Match_ID AND Player_ID IN (SELECT Player_ID FROM Players WHERE Team_ID = m.Team_B_ID)), 0)
+            )
+        ELSE 'Pending'
+    END AS Score_Line,
+    IFNULL(tw.Team_Name, 'TBD') AS Winner,
+    m.Match_Date,
+    m.Stage
+FROM Matches m
+JOIN Sports sp ON m.Sport_ID = sp.Sport_ID
+JOIN Teams ta ON m.Team_A_ID = ta.Team_ID
+JOIN Teams tb ON m.Team_B_ID = tb.Team_ID
+LEFT JOIN Teams tw ON m.Winner_Team_ID = tw.Team_ID
+WHERE m.Status = 'Completed';
+
 -- ═══════════════════════════════════════════════════════════
---  GRANT / REVOKE (Role-based access control)
+--  GRANT / REVOKE (Role-based access control hardened)
 -- ═══════════════════════════════════════════════════════════
 
-CREATE USER IF NOT EXISTS 'arena_admin'@'localhost'
-    IDENTIFIED BY 'admin_secure_123';
-CREATE USER IF NOT EXISTS 'arena_manager'@'localhost'
-    IDENTIFIED BY 'manager_secure_123';
-CREATE USER IF NOT EXISTS 'arena_viewer'@'localhost'
-    IDENTIFIED BY 'viewer_secure_123';
+CREATE USER IF NOT EXISTS 'arena_admin'@'localhost' IDENTIFIED BY 'admin_secure_123';
+CREATE USER IF NOT EXISTS 'arena_manager'@'localhost' IDENTIFIED BY 'manager_secure_123';
+CREATE USER IF NOT EXISTS 'arena_viewer'@'localhost' IDENTIFIED BY 'viewer_secure_123';
 
 -- Admin: full access
 GRANT ALL PRIVILEGES ON ARENA_SNU.* TO 'arena_admin'@'localhost';
 
--- Manager: read + score entry + scheduling
-GRANT SELECT ON ARENA_SNU.*                             TO 'arena_manager'@'localhost';
+-- Manager: read + score entry + scheduling + confirm results
+GRANT SELECT ON ARENA_SNU.* TO 'arena_manager'@'localhost';
 GRANT INSERT, UPDATE ON ARENA_SNU.Scorecard_Cricket     TO 'arena_manager'@'localhost';
 GRANT INSERT, UPDATE ON ARENA_SNU.Scorecard_Football    TO 'arena_manager'@'localhost';
 GRANT INSERT, UPDATE ON ARENA_SNU.Scorecard_Basketball  TO 'arena_manager'@'localhost';
 GRANT INSERT          ON ARENA_SNU.Matches              TO 'arena_manager'@'localhost';
 GRANT EXECUTE         ON PROCEDURE ARENA_SNU.ScheduleMatch TO 'arena_manager'@'localhost';
+GRANT EXECUTE         ON PROCEDURE ARENA_SNU.UpdateMatchResult TO 'arena_manager'@'localhost';
 
--- Viewer: read-only on public tables + views
+-- Viewer: STRICTLY read-only on public tables + views
+-- 1) Grant USAGE to ensure the user exists safely, then clear ALL privs.
+GRANT USAGE ON *.* TO 'arena_viewer'@'localhost';
+REVOKE ALL PRIVILEGES, GRANT OPTION FROM 'arena_viewer'@'localhost';
+
+-- 2) Grant SELECT specific reads only
 GRANT SELECT ON ARENA_SNU.Sports              TO 'arena_viewer'@'localhost';
 GRANT SELECT ON ARENA_SNU.Teams               TO 'arena_viewer'@'localhost';
 GRANT SELECT ON ARENA_SNU.Players             TO 'arena_viewer'@'localhost';
@@ -486,6 +553,11 @@ GRANT SELECT ON ARENA_SNU.Upcoming_Schedule   TO 'arena_viewer'@'localhost';
 GRANT SELECT ON ARENA_SNU.Points_Table        TO 'arena_viewer'@'localhost';
 GRANT SELECT ON ARENA_SNU.Top_Scorers         TO 'arena_viewer'@'localhost';
 GRANT SELECT ON ARENA_SNU.Finals_Overview     TO 'arena_viewer'@'localhost';
+GRANT SELECT ON ARENA_SNU.Detailed_Match_Results TO 'arena_viewer'@'localhost';
+
+-- Grant read access on new view to manager and admin roles as well
+GRANT SELECT ON ARENA_SNU.Detailed_Match_Results TO 'arena_manager'@'localhost';
+GRANT SELECT ON ARENA_SNU.Detailed_Match_Results TO 'arena_admin'@'localhost';
 
 FLUSH PRIVILEGES;
 
@@ -673,7 +745,6 @@ ON SCHEDULE EVERY 1 HOUR
 DO
 BEGIN
     -- Auto-cancel matches that were scheduled 2+ days ago but never had a result entered
-    -- NOTE: 'Ongoing' is not a valid Status value; valid values are Scheduled/Completed/Cancelled
     UPDATE Matches
     SET    Status = 'Cancelled'
     WHERE  Status     = 'Scheduled'
