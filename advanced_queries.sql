@@ -6,6 +6,7 @@
 -- ============================================================
 
 USE ARENA_SNU;
+SET SESSION sql_mode=(SELECT REPLACE(@@sql_mode,'ONLY_FULL_GROUP_BY',''));
 
 -- ═══════════════════════════════════════════════════════════
 --  SCHEMA PATCH: Add Icon column to Sports (safe for re-runs)
@@ -218,7 +219,9 @@ DROP PROCEDURE IF EXISTS UpdateMatchResult;
 DELIMITER $$
 CREATE PROCEDURE UpdateMatchResult(
     IN p_match_id  INT,
-    IN p_winner_id INT
+    IN p_winner_id INT,
+    IN p_team_a_score VARCHAR(20),
+    IN p_team_b_score VARCHAR(20)
 )
 BEGIN
     DECLARE EXIT HANDLER FOR SQLEXCEPTION
@@ -247,7 +250,9 @@ BEGIN
     END IF;
 
     UPDATE Matches
-    SET    Winner_Team_ID = p_winner_id
+    SET    Winner_Team_ID = p_winner_id,
+           Team_A_Score = p_team_a_score,
+           Team_B_Score = p_team_b_score
     WHERE  Match_ID = p_match_id;
 
     -- Status auto-set to 'Completed' by trg_match_completed trigger
@@ -296,7 +301,7 @@ BEGIN
                 JOIN   Sports  sp ON t.Sport_ID   = sp.Sport_ID
                 LEFT JOIN Scorecard_Cricket sc ON sc.Player_ID = p.Player_ID
                 WHERE  sp.Sport_Name = 'Cricket'
-                GROUP BY p.Player_ID
+                GROUP BY p.Player_ID, p.Player_Name, t.Team_Name, t.University
                 ORDER BY Runs DESC;
 
             DECLARE CONTINUE HANDLER FOR NOT FOUND SET done = 1;
@@ -332,7 +337,7 @@ BEGIN
                 JOIN   Sports  sp ON t.Sport_ID = sp.Sport_ID
                 LEFT JOIN Scorecard_Football sf ON sf.Player_ID = p.Player_ID
                 WHERE  sp.Sport_Name = 'Football'
-                GROUP BY p.Player_ID
+                GROUP BY p.Player_ID, p.Player_Name, t.Team_Name, t.University
                 ORDER BY SUM(sf.Goals) DESC;
 
             DECLARE CONTINUE HANDLER FOR NOT FOUND SET done2 = 1;
@@ -368,7 +373,7 @@ BEGIN
                 JOIN   Sports  sp ON t.Sport_ID = sp.Sport_ID
                 LEFT JOIN Scorecard_Basketball sb ON sb.Player_ID = p.Player_ID
                 WHERE  sp.Sport_Name = 'Basketball'
-                GROUP BY p.Player_ID
+                GROUP BY p.Player_ID, p.Player_Name, t.Team_Name, t.University
                 ORDER BY SUM(sb.Points) DESC;
 
             DECLARE CONTINUE HANDLER FOR NOT FOUND SET done3 = 1;
@@ -424,7 +429,7 @@ JOIN   Sports  sp ON t.Sport_ID = sp.Sport_ID
 LEFT JOIN Matches m
        ON (m.Team_A_ID = t.Team_ID OR m.Team_B_ID = t.Team_ID)
       AND m.Status = 'Completed'
-GROUP BY t.Team_ID
+GROUP BY t.Team_ID, t.Team_Name, t.University, sp.Sport_Name, sp.Icon
 ORDER BY sp.Sport_Name, Points DESC;
 
 -- V3: Top scorers — UNION ALL across all 3 sports
@@ -434,21 +439,21 @@ SELECT p.Player_Name, t.Team_Name, t.University, 'Cricket'    AS Sport,
 FROM   Scorecard_Cricket sc
 JOIN   Players p ON sc.Player_ID = p.Player_ID
 JOIN   Teams   t ON p.Team_ID   = t.Team_ID
-GROUP BY sc.Player_ID
+GROUP BY p.Player_ID, p.Player_Name, t.Team_Name, t.University
 UNION ALL
 SELECT p.Player_Name, t.Team_Name, t.University, 'Football',
        'Goals', CAST(SUM(sf.Goals) AS DECIMAL(10,2))
 FROM   Scorecard_Football sf
 JOIN   Players p ON sf.Player_ID = p.Player_ID
 JOIN   Teams   t ON p.Team_ID   = t.Team_ID
-GROUP BY sf.Player_ID
+GROUP BY p.Player_ID, p.Player_Name, t.Team_Name, t.University
 UNION ALL
 SELECT p.Player_Name, t.Team_Name, t.University, 'Basketball',
        'Avg Points', CAST(AVG(sb.Points) AS DECIMAL(10,2))
 FROM   Scorecard_Basketball sb
 JOIN   Players p ON sb.Player_ID = p.Player_ID
 JOIN   Teams   t ON p.Team_ID   = t.Team_ID
-GROUP BY sb.Player_ID
+GROUP BY p.Player_ID, p.Player_Name, t.Team_Name, t.University
 ORDER BY Sport, Total DESC;
 
 -- V4: Audit trail (clean IFNULL presentation)
@@ -487,21 +492,21 @@ SELECT
     CASE 
         WHEN sp.Sport_Name = 'Football' THEN 
             CONCAT(
-                IFNULL((SELECT SUM(Goals) FROM Scorecard_Football WHERE Match_ID = m.Match_ID AND Player_ID IN (SELECT Player_ID FROM Players WHERE Team_ID = m.Team_A_ID)), 0),
+                IFNULL(m.Team_A_Score, IFNULL((SELECT SUM(Goals) FROM Scorecard_Football WHERE Match_ID = m.Match_ID AND Player_ID IN (SELECT Player_ID FROM Players WHERE Team_ID = m.Team_A_ID)), 0)),
                 ' - ', 
-                IFNULL((SELECT SUM(Goals) FROM Scorecard_Football WHERE Match_ID = m.Match_ID AND Player_ID IN (SELECT Player_ID FROM Players WHERE Team_ID = m.Team_B_ID)), 0)
+                IFNULL(m.Team_B_Score, IFNULL((SELECT SUM(Goals) FROM Scorecard_Football WHERE Match_ID = m.Match_ID AND Player_ID IN (SELECT Player_ID FROM Players WHERE Team_ID = m.Team_B_ID)), 0))
             )
         WHEN sp.Sport_Name = 'Cricket' THEN 
             CONCAT(
-                IFNULL((SELECT SUM(Runs_Scored) FROM Scorecard_Cricket WHERE Match_ID = m.Match_ID AND Player_ID IN (SELECT Player_ID FROM Players WHERE Team_ID = m.Team_A_ID)), 0),
+                IFNULL(m.Team_A_Score, IFNULL((SELECT SUM(Runs_Scored) FROM Scorecard_Cricket WHERE Match_ID = m.Match_ID AND Player_ID IN (SELECT Player_ID FROM Players WHERE Team_ID = m.Team_A_ID)), 0)),
                 ' vs ',
-                IFNULL((SELECT SUM(Runs_Scored) FROM Scorecard_Cricket WHERE Match_ID = m.Match_ID AND Player_ID IN (SELECT Player_ID FROM Players WHERE Team_ID = m.Team_B_ID)), 0)
+                IFNULL(m.Team_B_Score, IFNULL((SELECT SUM(Runs_Scored) FROM Scorecard_Cricket WHERE Match_ID = m.Match_ID AND Player_ID IN (SELECT Player_ID FROM Players WHERE Team_ID = m.Team_B_ID)), 0))
             )
         WHEN sp.Sport_Name = 'Basketball' THEN 
             CONCAT(
-                IFNULL((SELECT SUM(Points) FROM Scorecard_Basketball WHERE Match_ID = m.Match_ID AND Player_ID IN (SELECT Player_ID FROM Players WHERE Team_ID = m.Team_A_ID)), 0),
+                IFNULL(m.Team_A_Score, IFNULL((SELECT SUM(Points) FROM Scorecard_Basketball WHERE Match_ID = m.Match_ID AND Player_ID IN (SELECT Player_ID FROM Players WHERE Team_ID = m.Team_A_ID)), 0)),
                 ' - ',
-                IFNULL((SELECT SUM(Points) FROM Scorecard_Basketball WHERE Match_ID = m.Match_ID AND Player_ID IN (SELECT Player_ID FROM Players WHERE Team_ID = m.Team_B_ID)), 0)
+                IFNULL(m.Team_B_Score, IFNULL((SELECT SUM(Points) FROM Scorecard_Basketball WHERE Match_ID = m.Match_ID AND Player_ID IN (SELECT Player_ID FROM Players WHERE Team_ID = m.Team_B_ID)), 0))
             )
         ELSE 'Pending'
     END AS Score_Line,
@@ -580,7 +585,7 @@ SELECT t.Team_Name, t.University, sp.Sport_Name,
 FROM   Teams  t
 JOIN   Sports sp ON t.Sport_ID = sp.Sport_ID
 LEFT JOIN Matches m ON (m.Team_A_ID = t.Team_ID OR m.Team_B_ID = t.Team_ID)
-GROUP BY t.Team_ID
+GROUP BY t.Team_ID, t.Team_Name, t.University, sp.Sport_Name
 ORDER BY Total_Matches DESC;
 
 -- Q3: GROUP BY + HAVING — universities fielding teams in 2+ sports
@@ -599,7 +604,7 @@ SELECT p.Player_Name, t.Team_Name, t.University,
 FROM   Scorecard_Cricket sc
 JOIN   Players p ON sc.Player_ID = p.Player_ID
 JOIN   Teams   t ON p.Team_ID   = t.Team_ID
-GROUP BY sc.Player_ID
+GROUP BY sc.Player_ID, p.Player_Name, t.Team_Name, t.University
 ORDER BY Total_Runs DESC
 LIMIT 1;
 
@@ -611,7 +616,7 @@ SELECT p.Player_Name, t.Team_Name, t.University,
 FROM   Scorecard_Football sf
 JOIN   Players p ON sf.Player_ID = p.Player_ID
 JOIN   Teams   t ON p.Team_ID   = t.Team_ID
-GROUP BY sf.Player_ID
+GROUP BY sf.Player_ID, p.Player_Name, t.Team_Name, t.University
 ORDER BY Total_Goals DESC
 LIMIT 1;
 
@@ -623,7 +628,7 @@ SELECT p.Player_Name, t.Team_Name, t.University,
 FROM   Scorecard_Basketball sb
 JOIN   Players p ON sb.Player_ID = p.Player_ID
 JOIN   Teams   t ON p.Team_ID   = t.Team_ID
-GROUP BY sb.Player_ID
+GROUP BY sb.Player_ID, p.Player_Name, t.Team_Name, t.University
 HAVING COUNT(DISTINCT sb.Match_ID) >= 1
 ORDER BY Avg_Points DESC
 LIMIT 1;
@@ -650,7 +655,7 @@ SELECT p.Player_Name, t.Team_Name,
 FROM   Scorecard_Cricket sc
 JOIN   Players p ON sc.Player_ID = p.Player_ID
 JOIN   Teams   t ON p.Team_ID   = t.Team_ID
-GROUP BY sc.Player_ID
+GROUP BY sc.Player_ID, p.Player_Name, t.Team_Name
 HAVING Player_Total > (
     SELECT AVG(sc3.Runs_Scored)
     FROM   Scorecard_Cricket sc3
@@ -660,13 +665,16 @@ HAVING Player_Total > (
 
 -- Q9: UNION ALL — every scorer across all three sports
 SELECT p.Player_Name, 'Cricket'    AS Sport, SUM(sc.Runs_Scored) AS Score
-FROM   Scorecard_Cricket sc JOIN Players p ON sc.Player_ID = p.Player_ID GROUP BY sc.Player_ID
+FROM   Scorecard_Cricket sc JOIN Players p ON sc.Player_ID = p.Player_ID
+GROUP BY p.Player_ID, p.Player_Name
 UNION ALL
 SELECT p.Player_Name, 'Football',  SUM(sf.Goals)
-FROM   Scorecard_Football sf JOIN Players p ON sf.Player_ID = p.Player_ID GROUP BY sf.Player_ID
+FROM   Scorecard_Football sf JOIN Players p ON sf.Player_ID = p.Player_ID
+GROUP BY p.Player_ID, p.Player_Name
 UNION ALL
 SELECT p.Player_Name, 'Basketball', SUM(sb.Points)
-FROM   Scorecard_Basketball sb JOIN Players p ON sb.Player_ID = p.Player_ID GROUP BY sb.Player_ID
+FROM   Scorecard_Basketball sb JOIN Players p ON sb.Player_ID = p.Player_ID
+GROUP BY p.Player_ID, p.Player_Name
 ORDER BY Sport, Score DESC;
 
 -- Q10: CASE WHEN — points table with form indicator
@@ -685,7 +693,7 @@ SELECT t.Team_Name, sp.Sport_Name,
 FROM   Teams   t
 JOIN   Sports sp ON t.Sport_ID = sp.Sport_ID
 LEFT JOIN Matches m ON (m.Team_A_ID = t.Team_ID OR m.Team_B_ID = t.Team_ID)
-GROUP BY t.Team_ID
+GROUP BY t.Team_ID, t.Team_Name, sp.Sport_Name
 ORDER BY Points DESC;
 
 -- Q11: Nested subquery — busiest venue (most matches hosted)
@@ -728,30 +736,31 @@ FROM   Scorecard_Football sf
 JOIN   Players p ON sf.Player_ID = p.Player_ID
 JOIN   Teams   t ON p.Team_ID   = t.Team_ID
 WHERE  p.Role = 'SUSPENDED'
-GROUP BY sf.Player_ID;
+GROUP BY sf.Player_ID, p.Player_Name, t.Team_Name, t.University, p.Jersey_No;
 
 
--- ═══════════════════════════════════════════════════════════
+-- ═══════════════════════════════════════════════════════════════════
 --  EVENT SCHEDULER (Automated Background Tasks)
 -- ═══════════════════════════════════════════════════════════
 
--- Enable the global event scheduler
-SET GLOBAL event_scheduler = ON;
-
-DROP EVENT IF EXISTS AutoUpdateMatchStatus;
-DELIMITER $$
-CREATE EVENT AutoUpdateMatchStatus
-ON SCHEDULE EVERY 1 HOUR
-DO
-BEGIN
-    -- Auto-cancel matches that were scheduled 2+ days ago but never had a result entered
-    UPDATE Matches
-    SET    Status = 'Cancelled'
-    WHERE  Status     = 'Scheduled'
-      AND  Match_Date < DATE_SUB(CURDATE(), INTERVAL 2 DAY)
-      AND  Winner_Team_ID IS NULL;
-END$$
-DELIMITER ;
+-- Optional event scheduler setup is not enabled by default because it may
+-- require EVENT privileges. If you have those privileges, run the following
+-- section separately in a privileged session.
+--
+-- SET GLOBAL event_scheduler = ON;
+-- DROP EVENT IF EXISTS AutoUpdateMatchStatus;
+-- DELIMITER $$
+-- CREATE EVENT AutoUpdateMatchStatus
+-- ON SCHEDULE EVERY 1 HOUR
+-- DO
+-- BEGIN
+--     UPDATE Matches
+--     SET    Status = 'Cancelled'
+--     WHERE  Status     = 'Scheduled'
+--       AND  Match_Date < DATE_SUB(CURDATE(), INTERVAL 2 DAY)
+--       AND  Winner_Team_ID IS NULL;
+-- END$$
+-- DELIMITER ;
 
 -- Bonus: Call the cursor-based procedure
 -- CALL GenerateSportReport('Cricket');

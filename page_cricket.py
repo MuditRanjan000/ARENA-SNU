@@ -184,6 +184,43 @@ with tab_entry:
                             time.sleep(0.4)
                         st.toast("Score recorded! trg_player_form fired.", icon="✅")
                         time.sleep(1); st.rerun()
+            
+            st.markdown("<div style='height:24px'></div>", unsafe_allow_html=True)
+            
+            # --- MATCH RESULT ENTRY ---
+            st.markdown("""
+            <div style="margin-bottom:20px;">
+                <span style="font-family:'DM Sans',sans-serif; font-size:0.72rem; letter-spacing:5px;
+                    color:rgba(255,255,255,0.35); text-transform:uppercase; font-weight:500;">
+                    MATCH RESULT ENTRY
+                </span>
+                <div style="width:40px; height:2px; background:linear-gradient(90deg,#a855f7,transparent);
+                    border-radius:2px; margin-top:8px;"></div>
+            </div>
+            """, unsafe_allow_html=True)
+            
+            with st.form("cricket_match_result", clear_on_submit=True):
+                mc1, mc2 = st.columns(2)
+                with mc1:
+                    ta_score = st.text_input(f"{sel.get('Team_A', 'Team A')} Overall Score", placeholder="e.g. 174/6")
+                with mc2:
+                    tb_score = st.text_input(f"{sel.get('Team_B', 'Team B')} Overall Score", placeholder="e.g. 149/10")
+                
+                winner_label = st.radio("Who won?", [sel.get("Team_A", "Team A"), sel.get("Team_B", "Team B")], horizontal=True)
+                wid = sel["Team_A_ID"] if winner_label == sel.get("Team_A", "Team A") else sel["Team_B_ID"]
+                
+                sub_res = st.form_submit_button("🏆 Update Match Result", use_container_width=True)
+                
+            if sub_res:
+                with st.spinner("Updating match result…"):
+                    from db_connection import call_procedure
+                    _, err = call_procedure("UpdateMatchResult", (mid, wid, ta_score if ta_score else None, tb_score if tb_score else None))
+                    time.sleep(0.4)
+                if err:
+                    st.error(f"❌ {err}")
+                else:
+                    st.success(f"✅ Match {mid} completed! Winner: {winner_label}")
+                    st.balloons(); time.sleep(1.5); st.rerun()
 
 # ── LEADERBOARDS ──────────────────────────────────────────────
 with tab_boards:

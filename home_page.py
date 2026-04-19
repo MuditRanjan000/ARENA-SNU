@@ -63,8 +63,8 @@ st.markdown("""
 
 # ── RBAC LOGIC ────────────────────────────────────────────────
 role            = st.session_state.get("role", "viewer")
-CAN_MOD_ROSTER  = role in ("admin", "organiser")
-CAN_MOD_RESULTS = role in ("admin", "manager")
+CAN_MOD_ROSTER  = role in ("admin", "manager")
+CAN_MOD_RESULTS = role in ("admin", "organiser")
 
 tab_labels = ["📊 Dashboard", "🏆 Match Results", "🏟️ Teams", "👤 Players"]
 tabs        = st.tabs(tab_labels)
@@ -390,19 +390,26 @@ with tab_results:
             </div>""", unsafe_allow_html=True)
 
             sel = mdict[st.selectbox("Select match", list(mdict.keys()), label_visibility="collapsed", key="hp_match_sel")]
+            
+            mc1, mc2 = st.columns(2)
+            with mc1:
+                ta_score = st.text_input(f"{sel['Team_A']} Overall Score", placeholder="Optional")
+            with mc2:
+                tb_score = st.text_input(f"{sel['Team_B']} Overall Score", placeholder="Optional")
+                
             winner_label = st.radio("Who won?", [sel["Team_A"], sel["Team_B"]], horizontal=True, key="wr")
             wid = sel["TID_A"] if winner_label == sel["Team_A"] else sel["TID_B"]
 
             st.markdown("<div style='height:8px'></div>", unsafe_allow_html=True)
 
             if st.button("🏆 Confirm & Save Result", use_container_width=True):
-                with st.spinner("Running ACID transaction…"):
-                    _, err = call_procedure("UpdateMatchResult", (sel["Match_ID"], wid))
+                with st.spinner("Updating Match..."):
+                    _, err = call_procedure("UpdateMatchResult", (sel["Match_ID"], wid, ta_score if ta_score else None, tb_score if tb_score else None))
                     time.sleep(0.4)
                 if err:
                     st.error(f"❌ {err}")
                 else:
-                    st.success(f"✅ **{winner_label}** wins! Trigger fired → Status='Completed'. Audit logged.")
+                    st.success(f"✅ **{winner_label}** wins! Trigger fired → Status='Completed'.")
                     st.balloons(); time.sleep(1.5); st.rerun()
         else:
             st.markdown("""

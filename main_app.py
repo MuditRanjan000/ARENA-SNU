@@ -94,7 +94,7 @@ UNIFIED_CSS = """
 # ─────────────────────────────
 # PAGE REGISTRY
 # ─────────────────────────────
-PUBLIC_PAGES = ["🏠 Home Dashboard", "⚔️ Compare Players", "📈 Predictions"]
+PUBLIC_PAGES = ["🏠 Home Dashboard", "🏏 Cricket", "⚽ Football", "🏀 Basketball", "⚔️ Compare Players", "📈 Predictions"]
 
 ALL_PAGES = {
     "🏠 Home Dashboard":  "home_page.py",
@@ -110,7 +110,7 @@ ALL_PAGES = {
 ROLE_ACCESS = {
     "admin":     list(ALL_PAGES.keys()),
     "organiser": ["🏠 Home Dashboard", "📅 Schedule Match", "🏏 Cricket", "⚽ Football", "🏀 Basketball"],
-    "manager":   ["🏠 Home Dashboard", "⚔️ Compare Players", "📈 Predictions"],
+    "manager":   ["🏠 Home Dashboard", "🏏 Cricket", "⚽ Football", "🏀 Basketball", "⚔️ Compare Players", "📈 Predictions"],
     "viewer":    PUBLIC_PAGES,
 }
 

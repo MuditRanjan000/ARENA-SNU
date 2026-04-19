@@ -333,6 +333,8 @@ CREATE TABLE Matches (
     Stage          ENUM('Group Stage','Quarter-Final','Semi-Final','Final') DEFAULT 'Group Stage',
     Winner_Team_ID INT  DEFAULT NULL,
     Status         ENUM('Scheduled','Completed','Cancelled') DEFAULT 'Scheduled',
+    Team_A_Score   VARCHAR(20) DEFAULT NULL,
+    Team_B_Score   VARCHAR(20) DEFAULT NULL,
     FOREIGN KEY (Sport_ID)       REFERENCES Sports(Sport_ID),
     FOREIGN KEY (Team_A_ID)      REFERENCES Teams(Team_ID),
     FOREIGN KEY (Team_B_ID)      REFERENCES Teams(Team_ID),

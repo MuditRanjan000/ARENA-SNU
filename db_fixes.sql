@@ -9,7 +9,23 @@ ALTER TABLE Users
     MODIFY Role ENUM('admin','organiser','manager','viewer') DEFAULT 'viewer';
 
 -- ── 2. Add Icon column to Sports ────────────────────────────
-ALTER TABLE Sports ADD COLUMN IF NOT EXISTS Icon VARCHAR(10) DEFAULT '🏅';
+DROP PROCEDURE IF EXISTS _AddIconColumn;
+DELIMITER $$
+CREATE PROCEDURE _AddIconColumn()
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1
+        FROM   information_schema.COLUMNS
+        WHERE  TABLE_SCHEMA = 'ARENA_SNU'
+          AND  TABLE_NAME   = 'Sports'
+          AND  COLUMN_NAME  = 'Icon'
+    ) THEN
+        ALTER TABLE Sports ADD COLUMN Icon VARCHAR(10) DEFAULT '🏅';
+    END IF;
+END$$
+DELIMITER ;
+CALL _AddIconColumn();
+DROP PROCEDURE IF EXISTS _AddIconColumn;
 
 UPDATE Sports SET Icon='🏏' WHERE Sport_Name='Cricket';
 UPDATE Sports SET Icon='⚽' WHERE Sport_Name='Football';
@@ -19,7 +35,45 @@ UPDATE Sports SET Icon='🏐' WHERE Sport_Name='Volleyball';
 UPDATE Sports SET Icon='🏓' WHERE Sport_Name='Table Tennis';
 
 -- ── 3. Add Group_Name column to Teams ───────────────────────
-ALTER TABLE Teams ADD COLUMN IF NOT EXISTS Group_Name VARCHAR(10) DEFAULT 'A';
+DROP PROCEDURE IF EXISTS _AddGroupNameColumn;
+DELIMITER $$
+CREATE PROCEDURE _AddGroupNameColumn()
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1
+        FROM   information_schema.COLUMNS
+        WHERE  TABLE_SCHEMA = 'ARENA_SNU'
+          AND  TABLE_NAME   = 'Teams'
+          AND  COLUMN_NAME  = 'Group_Name'
+    ) THEN
+        ALTER TABLE Teams ADD COLUMN Group_Name VARCHAR(10) DEFAULT 'A';
+    END IF;
+END$$
+DELIMITER ;
+CALL _AddGroupNameColumn();
+DROP PROCEDURE IF EXISTS _AddGroupNameColumn;
+
+-- ── 3.1 Add Score Columns to Matches ────────────────────────
+DROP PROCEDURE IF EXISTS _AddMatchScoreColumns;
+DELIMITER $$
+CREATE PROCEDURE _AddMatchScoreColumns()
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.COLUMNS
+        WHERE TABLE_SCHEMA = 'ARENA_SNU' AND TABLE_NAME = 'Matches' AND COLUMN_NAME = 'Team_A_Score'
+    ) THEN
+        ALTER TABLE Matches ADD COLUMN Team_A_Score VARCHAR(20) DEFAULT NULL;
+    END IF;
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.COLUMNS
+        WHERE TABLE_SCHEMA = 'ARENA_SNU' AND TABLE_NAME = 'Matches' AND COLUMN_NAME = 'Team_B_Score'
+    ) THEN
+        ALTER TABLE Matches ADD COLUMN Team_B_Score VARCHAR(20) DEFAULT NULL;
+    END IF;
+END$$
+DELIMITER ;
+CALL _AddMatchScoreColumns();
+DROP PROCEDURE IF EXISTS _AddMatchScoreColumns;
 
 -- Assign groups for cricket teams
 UPDATE Teams SET Group_Name='A' WHERE Team_ID IN (1,2) AND Sport_ID=1;
@@ -79,9 +133,25 @@ LEFT JOIN Teams tw ON m.Winner_Team_ID = tw.Team_ID
 WHERE m.Stage = 'Final'
 ORDER BY sp.Sport_Name;
 
--- ── 7. Verify ────────────────────────────────────────────────
+-- ── 7. Create or refresh Points_Table view ───────────────────
+CREATE OR REPLACE VIEW Points_Table AS
+SELECT t.Team_Name, t.University, sp.Sport_Name, sp.Icon,
+       COUNT(m.Match_ID) AS Matches_Played,
+       SUM(CASE WHEN m.Winner_Team_ID = t.Team_ID THEN 1 ELSE 0 END)                             AS Wins,
+       SUM(CASE WHEN m.Winner_Team_ID != t.Team_ID AND m.Winner_Team_ID IS NOT NULL THEN 1 ELSE 0 END) AS Losses,
+       SUM(CASE WHEN m.Winner_Team_ID = t.Team_ID THEN 3 ELSE 0 END)                             AS Points
+FROM   Teams   t
+JOIN   Sports  sp ON t.Sport_ID = sp.Sport_ID
+LEFT JOIN Matches m
+       ON (m.Team_A_ID = t.Team_ID OR m.Team_B_ID = t.Team_ID)
+      AND m.Status = 'Completed'
+GROUP BY t.Team_ID, t.Team_Name, t.University, sp.Sport_Name, sp.Icon
+ORDER BY sp.Sport_Name, Points DESC;
+
+-- ── 8. Verify ────────────────────────────────────────────────
 SELECT Username, Role FROM Users ORDER BY Role;
 SELECT * FROM Finals_Overview;
 SELECT * FROM Upcoming_Schedule LIMIT 5;
+SELECT * FROM Points_Table LIMIT 5;
 
 SELECT 'db_fixes.sql complete!' AS Status;
