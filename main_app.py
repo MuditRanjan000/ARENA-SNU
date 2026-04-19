@@ -109,7 +109,7 @@ ALL_PAGES = {
 
 ROLE_ACCESS = {
     "admin":     list(ALL_PAGES.keys()),
-    "organiser": ["🏠 Home Dashboard", "📅 Schedule Match", "🏏 Cricket", "⚽ Football", "🏀 Basketball"],
+    "organiser": ["🏠 Home Dashboard", "📅 Schedule Match", "🏏 Cricket", "⚽ Football", "🏀 Basketball", "⚔️ Compare Players", "📈 Predictions"],
     "manager":   ["🏠 Home Dashboard", "🏏 Cricket", "⚽ Football", "🏀 Basketball", "⚔️ Compare Players", "📈 Predictions"],
     "viewer":    PUBLIC_PAGES,
 }

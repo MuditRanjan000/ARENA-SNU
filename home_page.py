@@ -512,7 +512,7 @@ with tab_teams:
             <div style="padding:20px; border-radius:12px; background:rgba(255,255,255,0.04);
                 border:1px solid rgba(255,255,255,0.08); display:flex; align-items:center; gap:10px;">
                 <span style="font-size:1.2rem;">🔒</span>
-                <span style="color:#7a8499; font-size:0.9rem;">Team registration is restricted to <strong>Organisers</strong> and <strong>Admins</strong>.</span>
+                <span style="color:#7a8499; font-size:0.9rem;">Team registration is restricted to <strong>Managers</strong> and <strong>Admins</strong>.</span>
             </div>
             """, unsafe_allow_html=True)
 
@@ -606,7 +606,7 @@ with tab_players:
             <div style="padding:20px; border-radius:12px; background:rgba(255,255,255,0.04);
                 border:1px solid rgba(255,255,255,0.08); display:flex; align-items:center; gap:10px;">
                 <span style="font-size:1.2rem;">🔒</span>
-                <span style="color:#7a8499; font-size:0.9rem;">Player registration is restricted to <strong>Organisers</strong> and <strong>Admins</strong>.</span>
+                <span style="color:#7a8499; font-size:0.9rem;">Player registration is restricted to <strong>Managers</strong> and <strong>Admins</strong>.</span>
             </div>
             """, unsafe_allow_html=True)
 
