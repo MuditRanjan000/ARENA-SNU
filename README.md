@@ -73,7 +73,7 @@ ARENA SNU is a full-stack database-driven web application built to digitalise **
 | `Venues` | 5 SNU campus venue records |
 | `Teams` | 18 university teams (6 per sport) |
 | `Players` | 174 players across all teams |
-| `Matches` | All scheduled and completed matches |
+| `Matches` | All scheduled and completed matches, tracks overall scores |
 | `Scorecard_Cricket` | Per-player cricket stats |
 | `Scorecard_Football` | Per-player football stats |
 | `Scorecard_Basketball` | Per-player basketball stats |
@@ -175,9 +175,9 @@ The app opens at `http://localhost:8501` in your browser.
 | Username | Password | Role | Access |
 |---|---|---|---|
 | `admin` | `arena@admin123` | Admin | Full access + Admin Panel |
-| `organiser1` | `org@123` | Organiser | Score entry + Match scheduling |
-| `manager1` | `manage123` | Manager | Scheduling + Analytics + Predictions |
-| `viewer1` | `view123` | Viewer | Public read-only pages |
+| `organiser1` | `org@123` | Organiser | Score entry, Match scheduling + Match Result Entry |
+| `manager1` | `manage123` | Manager | Team/Player management + Analytics + Predictions |
+| `viewer1` | `view123` | Viewer | Public read-only pages (now includes sports leaderboards) |
 
 ---
 
@@ -189,8 +189,8 @@ Live KPIs, Finals strip, Points table, Standings chart, and upcoming schedule â€
 ### Match Scheduling
 `ScheduleMatch` stored procedure prevents double-booking at the database level. Accessible to admin and organiser.
 
-### Score Entry
-Separate tabbed pages for Cricket, Football, and Basketball. Duplicate-entry guard before each INSERT. All triggers fire automatically on save.
+### Score & Match Result Entry
+Separate tabbed pages for Cricket, Football, and Basketball. Duplicate-entry guard before each player stats INSERT. Organisers can also declare match winners and input explicit overall scores directly from these pages or the home dashboard. All triggers fire automatically on save.
 
 ### ML Prediction
 Fetches the last 10 scorecard entries for a player from MySQL, runs `numpy.polyfit` (degree 1) linear regression, plots the trend line with a 95% confidence band, and optionally saves the result to the `Predictions` table.
