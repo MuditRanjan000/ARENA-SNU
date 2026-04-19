@@ -63,7 +63,8 @@ st.markdown("""
 
 # ── RBAC LOGIC ────────────────────────────────────────────────
 role            = st.session_state.get("role", "viewer")
-CAN_MOD_ROSTER  = role in ("admin", "manager")
+CAN_MOD_TEAMS   = role in ("admin", "organiser")
+CAN_MOD_PLAYERS = role in ("admin", "manager")
 CAN_MOD_RESULTS = role in ("admin", "organiser")
 
 tab_labels = ["📊 Dashboard", "🏆 Match Results", "🏟️ Teams", "👤 Players"]
@@ -478,7 +479,7 @@ with tab_teams:
     cf, cl = st.columns([1,1.4], gap="large")
     
     with cf:
-        if CAN_MOD_ROSTER:
+        if CAN_MOD_TEAMS:
             st.markdown("""
             <div style="margin-bottom:12px;">
                 <span style="font-family:'DM Sans',sans-serif; font-size:0.72rem; letter-spacing:4px;
@@ -512,7 +513,7 @@ with tab_teams:
             <div style="padding:20px; border-radius:12px; background:rgba(255,255,255,0.04);
                 border:1px solid rgba(255,255,255,0.08); display:flex; align-items:center; gap:10px;">
                 <span style="font-size:1.2rem;">🔒</span>
-                <span style="color:#7a8499; font-size:0.9rem;">Team registration is restricted to <strong>Managers</strong> and <strong>Admins</strong>.</span>
+                <span style="color:#7a8499; font-size:0.9rem;">Team registration is restricted to <strong>Organisers</strong> and <strong>Admins</strong>.</span>
             </div>
             """, unsafe_allow_html=True)
 
@@ -570,7 +571,7 @@ with tab_players:
     pf, pl = st.columns([1,1.4], gap="large")
     
     with pf:
-        if CAN_MOD_ROSTER:
+        if CAN_MOD_PLAYERS:
             st.markdown("""
             <div style="margin-bottom:12px;">
                 <span style="font-family:'DM Sans',sans-serif; font-size:0.72rem; letter-spacing:4px;
