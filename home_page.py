@@ -65,6 +65,7 @@ st.markdown("""
 role            = st.session_state.get("role", "viewer")
 CAN_MOD_TEAMS   = role in ("admin", "organiser")
 CAN_MOD_PLAYERS = role in ("admin", "manager")
+CAN_REMOVE_PLAYERS = role in ("admin", "manager", "organiser")
 CAN_MOD_RESULTS = role in ("admin", "organiser")
 
 tab_labels = ["📊 Dashboard", "🏆 Match Results", "🏟️ Teams", "👤 Players"]
@@ -610,6 +611,32 @@ with tab_players:
                 <span style="color:#7a8499; font-size:0.9rem;">Player registration is restricted to <strong>Managers</strong> and <strong>Admins</strong>.</span>
             </div>
             """, unsafe_allow_html=True)
+            
+        if CAN_REMOVE_PLAYERS:
+            st.markdown("""
+            <div style="margin-top:32px; margin-bottom:12px;">
+                <span style="font-family:'DM Sans',sans-serif; font-size:0.72rem; letter-spacing:4px;
+                    color:rgba(255,255,255,0.35); text-transform:uppercase; font-weight:500;">
+                    🗑️ Remove a Player
+                </span>
+            </div>
+            """, unsafe_allow_html=True)
+            all_players_del = run_query("SELECT p.Player_ID, p.Player_Name, t.Team_Name FROM Players p JOIN Teams t ON p.Team_ID = t.Team_ID ORDER BY p.Player_Name")
+            if all_players_del:
+                del_map = {f"{p['Player_Name']} ({p['Team_Name']})": p["Player_ID"] for p in all_players_del}
+                with st.form("remove_player", clear_on_submit=True):
+                    del_sel = st.selectbox("Select Player to Remove", list(del_map.keys()))
+                    if st.form_submit_button("🗑️ Delete Player", use_container_width=True):
+                        try:
+                            # Try deleting the player. Will fail if foreign key constraints are violated.
+                            run_query("DELETE FROM Players WHERE Player_ID=%s", (del_map[del_sel],), fetch=False)
+                            st.toast(f"Player removed!", icon="✅")
+                            time.sleep(1)
+                            st.rerun()
+                        except Exception as e:
+                            st.error("❌ Cannot delete this player. They likely have recorded match scores or predictions.")
+            else:
+                st.caption("No players available to remove.")
 
     with pl:
         st.markdown("""
