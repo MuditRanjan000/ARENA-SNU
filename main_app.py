@@ -318,7 +318,7 @@ def landing_page():
     _, col, _ = st.columns([3, 2, 3])
     with col:
         if st.button("ENTER THE ARENA", use_container_width=True):
-            st.session_state.app_state = "login"
+            st.session_state.app_state = "app"
             st.rerun()
     st.markdown('</div>', unsafe_allow_html=True)
 
@@ -875,7 +875,7 @@ if st.session_state.app_state == "landing":
 elif st.session_state.app_state == "login":
     login_page()
 
-elif st.session_state.app_state == "app" and st.session_state.logged_in:
+elif st.session_state.app_state == "app":
 
     role  = st.session_state.role
     pages = {k: ALL_PAGES[k] for k in ROLE_ACCESS.get(role, PUBLIC_PAGES) if k in ALL_PAGES}
