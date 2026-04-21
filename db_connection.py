@@ -7,10 +7,10 @@ import os
 load_dotenv()
 
 DB_CONFIG = {
-    "host": os.getenv("DB_HOST", "localhost"),
-    "user": os.getenv("DB_USER", "root"),
+    "host": "localhost",
+    "user": "root",
     "password": os.getenv("DB_PASSWORD"),
-    "database": os.getenv("DB_NAME", "ARENA_SNU")
+    "database": "ARENA_SNU"
 }
 
 # Cache the connection pool resource globally, not the data
