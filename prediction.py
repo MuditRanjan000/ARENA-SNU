@@ -253,9 +253,9 @@ fig.update_layout(
                tickfont=dict(color="#7a8499")),
     yaxis=dict(title=cfg["label"], gridcolor="rgba(255,255,255,0.05)",
                linecolor="rgba(255,255,255,0.05)", tickfont=dict(color="#7a8499")),
-    legend=dict(orientation="h", y=1.12, bgcolor="rgba(0,0,0,0)",
+    legend=dict(orientation="h", yanchor="top", y=-0.25, xanchor="center", x=0.5, bgcolor="rgba(0,0,0,0)",
                 font=dict(color="#b0bac8", size=12)),
-    margin=dict(t=40, b=10, l=0, r=0),
+    margin=dict(t=40, b=80, l=0, r=0),
 )
 st.plotly_chart(fig, use_container_width=True)
 st.markdown("""
