@@ -586,7 +586,7 @@ def build_sidebar(role, pages):
     <div style="padding:18px 4px 10px;text-align:center">
       <div style="font-family:'Rajdhani',sans-serif;font-size:1.7rem;font-weight:700;
         background:linear-gradient(100deg,#5b52f5,#a855f7,#f5a623);
-        -webkit-background-clip:text;-webkit-text-fill-color:transparent">
+        background-clip: text; -webkit-background-clip: text; color: transparent; -webkit-text-fill-color: transparent;">
         🏆 ARENA SNU
       </div>
       <div style="font-size:11px;color:#3a4a6a;letter-spacing:.12em;margin-top:2px">
@@ -710,7 +710,7 @@ def admin_panel():
         <h1 style="font-family:'Rajdhani',sans-serif; font-size:3rem; font-weight:800; margin:0;
             line-height:1.0; color:#fff; letter-spacing:-0.01em;">
             🔐 Admin <span style="background:linear-gradient(90deg,#a855f7,#5b52f5);
-            -webkit-background-clip:text; -webkit-text-fill-color:transparent;">Panel</span>
+            background-clip: text; -webkit-background-clip: text; color: transparent; -webkit-text-fill-color: transparent;">Panel</span>
         </h1>
         <div style="width:52px; height:3px; background:linear-gradient(90deg,#a855f7,transparent);
             border-radius:2px; margin:14px 0 12px 0;"></div>

@@ -32,7 +32,7 @@ st.markdown("""
     <h1 style="font-family:'Rajdhani',sans-serif; font-size:3rem; font-weight:800; margin:0;
         line-height:1.0; color:#fff; letter-spacing:-0.01em;">
         🏀 Basketball <span style="background:linear-gradient(90deg,#f97316,#5b52f5);
-        -webkit-background-clip:text; -webkit-text-fill-color:transparent;">Module</span>
+        background-clip: text; -webkit-background-clip: text; color: transparent; -webkit-text-fill-color: transparent;">Module</span>
     </h1>
     <div style="width:52px; height:3px; background:linear-gradient(90deg,#f97316,transparent);
         border-radius:2px; margin:14px 0 12px 0;"></div>
