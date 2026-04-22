@@ -8,7 +8,7 @@ import importlib.util
 import os
 import base64
 import pandas as pd
-from db_connection import run_query
+from db_connection import run_query, call_procedure
 
 # ─────────────────────────────
 # CONFIG
