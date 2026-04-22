@@ -36,8 +36,7 @@ st.markdown("""
   </p>
   <h1 style="font-family:'Rajdhani',sans-serif; font-size:3.4rem; font-weight:800; margin:0;
      line-height:1.0; letter-spacing:-0.02em;">
-    <span style="background:linear-gradient(100deg,#5b52f5,#a855f7,#f5a623);
-    background-clip: text; -webkit-background-clip: text; color: transparent; -webkit-text-fill-color: transparent;">🏆 ARENA SNU</span>
+    <span style="color:#f5a623;">🏆 ARENA SNU</span>
   </h1>
   <div style="width:56px; height:3px; background:linear-gradient(90deg,#f5a623,transparent);
      border-radius:2px; margin:14px 0 16px 0;"></div>
