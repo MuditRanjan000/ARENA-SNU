@@ -373,7 +373,8 @@ with tab_form:
     fdata = run_query("""
         SELECT p.Player_Name,t.Team_Name,p.Form_Status,
                ROUND(IFNULL(AVG(sc.Runs_Scored),0),1) AS Avg_Runs,
-               IFNULL(SUM(sc.Wickets_Taken),0) AS Wickets
+               IFNULL(SUM(sc.Wickets_Taken),0) AS Wickets,
+               COUNT(DISTINCT sc.Match_ID) AS Matches_Played
         FROM Players p JOIN Teams t ON p.Team_ID=t.Team_ID
         LEFT JOIN Scorecard_Cricket sc ON sc.Player_ID=p.Player_ID
         WHERE t.Sport_ID=1
@@ -383,12 +384,18 @@ with tab_form:
     if fdata:
         fdf=pd.DataFrame(fdata)
         fdf["Status"]=fdf["Form_Status"].map({"In Form":"🔥 In Form","Out of Form":"❄️ Out of Form","Neutral":"➖ Neutral"}).fillna("➖ Neutral")
+        fdf["Matches_Played"] = fdf["Matches_Played"].astype(int)
+        fdf["Form Reliable?"] = fdf["Matches_Played"].apply(lambda x: "✅ Yes" if x >= 5 else f"⚠️ Only {x} match{'es' if x != 1 else ''}")
         def cf(v):
             if "In Form" in str(v):     return "color:#4ade80;font-weight:bold"
             if "Out of Form" in str(v): return "color:#f87171;font-weight:bold"
             return "color:#4a5568"
-        st.dataframe(fdf[["Player_Name","Team_Name","Status","Avg_Runs","Wickets"]].style.map(cf,subset=["Status"]),
-                     use_container_width=True,hide_index=True)
+        st.dataframe(
+            fdf[["Player_Name","Team_Name","Status","Matches_Played","Avg_Runs","Wickets","Form Reliable?"]]
+            .style.map(cf, subset=["Status"]),
+            use_container_width=True, hide_index=True
+        )
+        st.caption("⚠️ Form status is only reliable after 5+ matches (last-5 vs career avg comparison).")
     else:
         st.markdown("""
         <div style="padding:40px; text-align:center; border-radius:16px;
