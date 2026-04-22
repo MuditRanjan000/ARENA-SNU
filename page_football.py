@@ -227,7 +227,7 @@ if gb:
 
     table_col, chart_col = st.columns([1, 1.2], gap="large")
     with table_col:
-        st.dataframe(df, use_container_width=True, hide_index=True)
+        st.dataframe(df, width='stretch', hide_index=True)
 
     with chart_col:
         df2 = pd.DataFrame(gb)
@@ -289,7 +289,7 @@ susp = run_query("""
 """, fetch=True)
 if susp:
     st.dataframe(pd.DataFrame(susp).rename(columns={"Total_Yellows":"🟨 Yellows","Total_Reds":"🟥 Reds","Jersey":"Jersey #"}),
-                 use_container_width=True, hide_index=True)
+                 width='stretch', hide_index=True)
 else:
     st.markdown("""
     <div style="padding:16px 20px; border-radius:12px; background:rgba(34,197,94,0.06);
@@ -312,7 +312,7 @@ with st.expander("📋 All Football Stats"):
         FROM Scorecard_Football sf JOIN Players p ON sf.Player_ID=p.Player_ID
         JOIN Teams t ON p.Team_ID=t.Team_ID GROUP BY sf.Player_ID ORDER BY Goals DESC
     """)
-    if all_stats: st.dataframe(pd.DataFrame(all_stats),use_container_width=True,hide_index=True)
+    if all_stats: st.dataframe(pd.DataFrame(all_stats),width='stretch',hide_index=True)
     else:         st.info("No data yet.")
 
 st.markdown("""

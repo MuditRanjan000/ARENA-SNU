@@ -735,7 +735,7 @@ def admin_panel():
             df = pd.DataFrame(rows)
             icons = {"admin": "🔴", "organiser": "🟠", "manager": "🔵", "viewer": "🟢"}
             df["Role"] = df["Role"].map(lambda r: f"{icons.get(r, '')} {r}")
-            st.dataframe(df, use_container_width=True, hide_index=True)
+            st.dataframe(df, width='stretch', hide_index=True)
         st.caption("Passwords hidden for security.")
 
     with tab_add:
@@ -805,7 +805,7 @@ def admin_panel():
         audit = run_query("SELECT * FROM Audit_Log ORDER BY Changed_At DESC LIMIT 100", fetch=True)
         if audit:
             df_audit = pd.DataFrame(audit)
-            st.dataframe(df_audit, use_container_width=True, hide_index=True)
+            st.dataframe(df_audit, width='stretch', hide_index=True)
 
             st.divider()
             csv = df_audit.to_csv(index=False).encode("utf-8")
@@ -861,7 +861,7 @@ def admin_panel():
             GROUP BY sp.Sport_ID
         """)
         if sport_stats:
-            st.dataframe(pd.DataFrame(sport_stats), use_container_width=True, hide_index=True)
+            st.dataframe(pd.DataFrame(sport_stats), width='stretch', hide_index=True)
 
     with tab_reports:
         st.markdown("<div style='height:24px'></div>", unsafe_allow_html=True)
@@ -891,7 +891,7 @@ def admin_panel():
                     st.error(f"❌ Error: {err}")
                 elif res:
                     st.success(f"✅ Cursor execution complete! Loaded {len(res)} rows from temporary table.")
-                    st.dataframe(pd.DataFrame(res), use_container_width=True, hide_index=True)
+                    st.dataframe(pd.DataFrame(res), width='stretch', hide_index=True)
                 else:
                     st.info("No data found for this sport.")
 

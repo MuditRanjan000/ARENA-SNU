@@ -250,7 +250,7 @@ with stats_col:
         if "🟣" in str(v): return "color:#a855f7;font-weight:bold"
         if "🟢" in str(v): return "color:#22c55e;font-weight:bold"
         return "color:#7a8499"
-    st.dataframe(cdf.style.map(hle,subset=["Edge"]),use_container_width=True,hide_index=True)
+    st.dataframe(cdf.style.map(hle,subset=["Edge"]),width='stretch',hide_index=True)
 
     aw=sum(1 for r in rows if "🟣" in r["Edge"])
     bw=sum(1 for r in rows if "🟢" in r["Edge"])

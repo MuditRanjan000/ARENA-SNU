@@ -263,7 +263,7 @@ with tab_boards:
         if oc:
             df=pd.DataFrame(oc); df.insert(0,"Rank",range(1,len(df)+1))
             def hl(r): return ["background:rgba(168,85,247,.12)"]*len(r) if r["Rank"]==1 else [""]*len(r)
-            st.dataframe(df.style.apply(hl,axis=1),use_container_width=True,hide_index=True)
+            st.dataframe(df.style.apply(hl,axis=1),width='stretch',hide_index=True)
             fig=px.bar(df.head(8),x="Player_Name",y="Runs",color="Team_Name",
                        color_discrete_sequence=px.colors.qualitative.Vivid,
                        title="Top Run Scorers")
@@ -308,7 +308,7 @@ with tab_boards:
         if pc:
             df2=pd.DataFrame(pc); df2.insert(0,"Rank",range(1,len(df2)+1))
             def hl2(r): return ["background:rgba(91,82,245,.12)"]*len(r) if r["Rank"]==1 else [""]*len(r)
-            st.dataframe(df2.style.apply(hl2,axis=1),use_container_width=True,hide_index=True)
+            st.dataframe(df2.style.apply(hl2,axis=1),width='stretch',hide_index=True)
             fig2=px.bar(df2.head(8),x="Player_Name",y="Wickets",
                         color_discrete_sequence=["#a855f7"],title="Top Wicket Takers")
             fig2.update_layout(plot_bgcolor="rgba(0,0,0,0)",paper_bgcolor="rgba(0,0,0,0)",
@@ -336,7 +336,7 @@ with tab_boards:
             FROM Scorecard_Cricket sc JOIN Players p ON sc.Player_ID=p.Player_ID
             JOIN Teams t ON p.Team_ID=t.Team_ID GROUP BY sc.Player_ID ORDER BY Runs DESC
         """)
-        if full: st.dataframe(pd.DataFrame(full),use_container_width=True,hide_index=True)
+        if full: st.dataframe(pd.DataFrame(full),width='stretch',hide_index=True)
         else:    st.markdown("<p style='color:#7a8499;'>No data yet.</p>", unsafe_allow_html=True)
 
 # ── FORM TRACKER ──────────────────────────────────────────────
@@ -393,7 +393,7 @@ with tab_form:
         st.dataframe(
             fdf[["Player_Name","Team_Name","Status","Matches_Played","Avg_Runs","Wickets","Form Reliable?"]]
             .style.map(cf, subset=["Status"]),
-            use_container_width=True, hide_index=True
+            width='stretch', hide_index=True
         )
         st.caption("⚠️ Form status is only reliable after 5+ matches (last-5 vs career avg comparison).")
     else:

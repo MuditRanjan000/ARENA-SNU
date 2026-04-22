@@ -317,7 +317,7 @@ with st.expander("📋 All Saved Predictions", expanded=False):
         ORDER BY pr.Predicted_At DESC LIMIT 30
     """)
     if past:
-        st.dataframe(pd.DataFrame(past), use_container_width=True, hide_index=True)
+        st.dataframe(pd.DataFrame(past), width='stretch', hide_index=True)
     else:
         st.markdown("""
         <div style="padding:14px 18px; font-family:'DM Sans',sans-serif;

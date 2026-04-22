@@ -215,7 +215,7 @@ with tab_dash:
             with tbl_col:
                 st.dataframe(
                     filtered[["Team_Name","Sport_Name","Wins","Losses","Points"]].reset_index(drop=True),
-                    use_container_width=True, hide_index=True)
+                    width='stretch', hide_index=True)
     else:
         st.markdown("""
         <div style="padding:32px; text-align:center; border-radius:16px;
@@ -259,7 +259,7 @@ with tab_dash:
             if v=="Cancelled": return "color:#f87171;font-weight:bold"
             return ""
         st.dataframe(sdf.style.map(style_status,subset=["Status"]),
-                     use_container_width=True,hide_index=True)
+                     width='stretch',hide_index=True)
     else:
         st.markdown("""
         <div style="padding:32px; text-align:center; border-radius:16px;
@@ -444,7 +444,7 @@ with tab_results:
     
     done = run_query(res_query + " ORDER BY Match_Date DESC")
     if done:
-        st.dataframe(pd.DataFrame(done), use_container_width=True, hide_index=True)
+        st.dataframe(pd.DataFrame(done), width='stretch', hide_index=True)
     else:
         st.markdown("""
         <div style="padding:32px; text-align:center; border-radius:16px;
@@ -536,7 +536,7 @@ with tab_teams:
             GROUP BY t.Team_ID ORDER BY sp.Sport_Name, t.Team_Name
         """)
         if tdata:
-            st.dataframe(pd.DataFrame(tdata), use_container_width=True, hide_index=True)
+            st.dataframe(pd.DataFrame(tdata), width='stretch', hide_index=True)
 
 
 # ═══════════ TAB 4 — PLAYERS ═════════════════════════════════
@@ -664,7 +664,7 @@ with tab_players:
                 if v=="Out of Form": return "color:#f87171;font-weight:bold"
                 return "color:#4a5568"
             st.dataframe(pdf.style.map(color_form,subset=["Form_Status"]),
-                         use_container_width=True,hide_index=True)
+                         width='stretch',hide_index=True)
         else:
             st.markdown("""
             <div style="padding:32px; text-align:center; border-radius:16px;

@@ -283,7 +283,7 @@ with tab_lb:
         </div>
         """, unsafe_allow_html=True)
         def hl(r): return ["background:rgba(249,115,22,.1)"]*len(r) if r["Rank"]==1 else [""]*len(r)
-        st.dataframe(df.style.apply(hl,axis=1),use_container_width=True,hide_index=True)
+        st.dataframe(df.style.apply(hl,axis=1),width='stretch',hide_index=True)
 
 # ── TEAM CHARTS ───────────────────────────────────────────────
 with tab_chart:
