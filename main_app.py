@@ -721,8 +721,8 @@ def admin_panel():
 
     st.divider()
 
-    tab_users, tab_add, tab_audit, tab_stats = st.tabs(
-        ["👥 Users", "➕ Add User", "📋 Audit Log", "📊 DB Stats"]
+    tab_users, tab_add, tab_audit, tab_stats, tab_reports = st.tabs(
+        ["👥 Users", "➕ Add User", "📋 Audit Log", "📊 DB Stats", "📑 Reports"]
     )
 
     with tab_users:
@@ -862,6 +862,38 @@ def admin_panel():
         """)
         if sport_stats:
             st.dataframe(pd.DataFrame(sport_stats), use_container_width=True, hide_index=True)
+
+    with tab_reports:
+        st.markdown("<div style='height:24px'></div>", unsafe_allow_html=True)
+        st.markdown("""
+        <div style="margin-bottom:20px;">
+            <span style="font-family:'DM Sans',sans-serif; font-size:0.72rem; letter-spacing:5px;
+                color:rgba(255,255,255,0.35); text-transform:uppercase; font-weight:500;">
+                CURSOR-BASED AGGREGATION
+            </span>
+            <h3 style="font-family:'Rajdhani',sans-serif; font-size:1.6rem; font-weight:700;
+                color:#fff; margin:6px 0 0 0; line-height:1.1;">
+                📑 Generate Sport Report
+            </h3>
+            <div style="width:48px; height:3px; background:linear-gradient(90deg,#22c55e,transparent);
+                border-radius:2px; margin-top:10px;"></div>
+        </div>
+        """, unsafe_allow_html=True)
+        
+        st.caption("This triggers the `GenerateSportReport` stored procedure. It uses a **SQL CURSOR** to loop over players and dynamically aggregate stats into a temporary table.")
+        
+        rep_sport = st.selectbox("Select Sport for Report", ["Cricket", "Football", "Basketball"], key="rep_sport_sel")
+        
+        if st.button("🚀 Generate Cursor Report", use_container_width=True, type="primary"):
+            with st.spinner("Executing Cursor Loop..."):
+                res, err = call_procedure("GenerateSportReport", (rep_sport,))
+                if err:
+                    st.error(f"❌ Error: {err}")
+                elif res:
+                    st.success(f"✅ Cursor execution complete! Loaded {len(res)} rows from temporary table.")
+                    st.dataframe(pd.DataFrame(res), use_container_width=True, hide_index=True)
+                else:
+                    st.info("No data found for this sport.")
 
 
 # ─────────────────────────────
